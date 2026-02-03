@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Data and artifacts
+uploads/
+data/
+processed/
+raw_a/
+raw_b/
+experiments/
+models/*.pt
+models/*.pth
+!models/bisenet_face_parsing.pth
+
+# Jupyter
+.ipynb_checkpoints/

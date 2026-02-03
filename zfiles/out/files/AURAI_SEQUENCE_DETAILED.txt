@@ -1,0 +1,219 @@
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                        AURAI COMPLETE SEQUENCE DIAGRAM                                 ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+🔄 FLOW OVERVIEW:
+────────────────────────────────────────────────────────────────────────────────────────
+
+User
+  │
+  ├─→ [1] Open App / Login
+  │   └─→ Frontend checks token → Backend verifies credentials → Store JWT
+  │
+  ├─→ [2] Upload Image / Capture from Webcam
+  │   └─→ Frontend shows preview → User clicks "Analyze"
+  │
+  ├─→ [3] Backend Quality & Face Detection
+  │   ├─→ QualityGate.assess_image_quality()
+  │   │   └─ Check: brightness, contrast, blur, resolution
+  │   ├─→ If FAIL → Return 422 with retry tips
+  │   └─→ If PASS → Continue to face detection
+  │
+  ├─→ [4] Face Detection & Cropping
+  │   ├─→ FaceDetection.crop_face() using MediaPipe
+  │   ├─→ If no face → Return 422 "No face detected"
+  │   └─→ If found → Crop + expand by margin (20%) + apply oval mask
+  │
+  ├─→ [5] Parallel Classification (Skin Type + Concerns)
+  │   ├─→ SkinTypeModel.predict() → 5 classes (Combination, Dry, Normal, Oily, Sensitive)
+  │   └─→ ConcernModel.predict() → 5 multilabel (acne, bags, blackheads, hyperpigmentation, redness)
+  │
+  ├─→ [6] Explainability Layer
+  │   └─→ GradCAM.gradcam_overlay_base64() → Generate heatmap visualization
+  │
+  ├─→ [7] Skincare Routine Generation
+  │   ├─→ Recommender.recommend_routine() based on skin_type & concerns
+  │   ├─→ Load INCI formulas from Excel files (4 products: cleanser, toner, serum, moisturizer)
+  │   └─→ Return structured routine with ingredients & concentrations
+  │
+  ├─→ [8] Safety Filter (Allergy Check)
+  │   ├─→ SafetyFilter.filter_routine_for_user()
+  │   ├─→ Fetch user allergies from database
+  │   ├─→ Check each ingredient against allergy list
+  │   └─→ Return {safe: bool, unsafe_ingredients: [...]}
+  │
+  ├─→ [9] Outcome & Risk Scoring
+  │   ├─→ OutcomeRisk.compute_outcome_and_risk()
+  │   ├─→ Calculate benefit scores for each treatment path
+  │   ├─→ Calculate risk scores (ingredient interactions, sensitivity flags)
+  │   └─→ Return {outcomes: {...}, risks: [...], confidence: float}
+  │
+  ├─→ [10] Store Results in Database
+  │   └─→ Backend inserts scan record into MySQL:
+  │       INSERT INTO scans (user_id, created_at, results_json)
+  │
+  ├─→ [11] Return Complete Response
+  │   └─→ 200 OK with full JSON:
+  │       {
+  │         predictions: {concerns, skin_type},
+  │         routine: {products},
+  │         heatmap: base64_png,
+  │         outcomes: {scores},
+  │         risks: [list],
+  │         scan_id: int
+  │       }
+  │
+  ├─→ [12] Display Results in Frontend
+  │   ├─→ Show skin concerns with confidence %
+  │   ├─→ Display skin type classification
+  │   ├─→ Render 4 skincare products with INCI ingredients
+  │   ├─→ Show heatmap (side-by-side: original + GradCAM)
+  │   ├─→ Display benefit & risk scores
+  │   └─→ Make results printable / shareable
+  │
+  └─→ [13] User Follow-Up Actions
+      ├─→ View History: Browse past scans
+      ├─→ Edit Allergies: Update profile preferences
+      ├─→ Scan Again: Reset form & upload new image
+      └─→ Download Report: Export as PDF/image
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                              MODULE RESPONSIBILITIES                                   ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+📱 Frontend (React):
+   • Login/Register flows
+   • Image upload (drag-drop, file picker, webcam)
+   • Webcam capture using react-webcam
+   • Form validation & error display
+   • Results rendering (concerns, skin type, routine, heatmap, scores)
+   • History page (list past scans)
+   • Profile page (edit allergies)
+
+⚙️ Backend (FastAPI):
+   • Route: POST /predict (main prediction endpoint)
+   • Route: POST /login, /register
+   • Route: GET /history
+   • Route: PUT /profile
+   • Orchestrate all modules
+   • Database CRUD operations
+
+✅ Quality Gate:
+   • Check image resolution (min 320px short side)
+   • Check brightness (0.20-0.85 in grayscale)
+   • Check contrast (min std 0.05)
+   • Check blur (Laplacian variance > 0.0015)
+   • Return structured quality report
+
+👤 Face Detection:
+   • Use MediaPipe face detection (min confidence 0.6)
+   • Crop face + expand by margin (20%)
+   • Apply oval mask for better blending
+   • Return crop + metadata (bbox, score)
+
+🎨 Skin Type Model (ResNet18):
+   • 5-class classification (not multilabel)
+   • Input: 224×224 normalized image
+   • Output: {skin_type, confidence, logits}
+   • Classes: Combination, Dry, Normal, Oily, Sensitive
+
+🔴 Concern Model (ResNet18):
+   • 5-label multilabel classification (sigmoid outputs)
+   • Per-class thresholds from JSON config
+   • Labels: acne, bags, blackheads, hyperpigmentation, redness
+   • Output: {label: {probability, prediction}, ...}
+
+🔥 GradCAM:
+   • Generate class activation maps for top predicted concern
+   • Overlay heatmap on original face image
+   • Encode result to Base64 PNG
+   • Used for explainability
+
+💊 Recommender:
+   • Load skin-type-specific Excel formulas
+   • Parse INCI ingredients per product
+   • Filter by concern severity (optional)
+   • Return {cleanser, toner, serum, moisturizer}
+
+🛡️ Safety Filter:
+   • Fetch user allergies from database
+   • Cross-reference with routine ingredients
+   • Flag unsafe combinations
+   • Return {safe, unsafe_ingredients}
+
+📊 Outcome & Risk:
+   • Score benefit for each treatment
+   • Score risk (ingredient interactions, sensitivity)
+   • Compute confidence intervals
+   • Return {outcomes, risks, confidence}
+
+🗄️ Database (MySQL):
+   • users table (id, name, email, password_hash, allergies, etc.)
+   • scans table (id, user_id, created_at, results_json)
+   • Queries: user lookup, scan insert/retrieve, allergy fetch
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                                 ERROR HANDLING                                         ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+❌ Quality Rejected (422)
+   → Backend returns: {passed: false, reasons: ["too_dark", "blurry"]}
+   → Frontend displays: "Retake required: Too dark • Blurry"
+   → User retakes image → Resubmit
+
+❌ No Face Found (422)
+   → Backend returns: {face_found: false}
+   → Frontend displays: "No face detected. Adjust position & retry"
+   → User retakes → Resubmit
+
+❌ Unsafe Ingredients (422)
+   → SafetyFilter detects allergen match
+   → Backend returns: {safe: false, unsafe_ingredients: ["ingredient1", "ingredient2"]}
+   → Frontend displays: "⚠️ These ingredients match your allergies"
+   → User can acknowledge and proceed or retake
+
+✅ Success (200)
+   → Full results returned
+   → Frontend displays complete analysis
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                                KEY INTERACTIONS                                        ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+User → Frontend: Upload image
+Frontend → Backend: POST /predict (FormData: file + user_id)
+Backend → QualityGate: assess_image_quality(image)
+QualityGate → Backend: {passed, reasons, metrics}
+
+Backend → FaceDetection: crop_face(image, margin=0.20)
+FaceDetection → Backend: (cropped_image, meta) or (None, {face_found: false})
+
+Backend → SkinTypeModel: predict(face_image)
+SkinTypeModel → Backend: {skin_type, confidence, logits}
+
+Backend → ConcernModel: predict(face_image)
+ConcernModel → Backend: {acne: {...}, bags: {...}, ...}
+
+Backend → GradCAM: gradcam_overlay_base64(image, model, logits)
+GradCAM → Backend: base64_png_string
+
+Backend → Recommender: recommend_routine(skin_type, concerns)
+Recommender → Backend: routine_json
+
+Backend → SafetyFilter: filter_routine_for_user(routine, allergies)
+SafetyFilter → Backend: {safe, unsafe_ingredients}
+
+Backend → OutcomeRisk: compute_outcome_and_risk(...)
+OutcomeRisk → Backend: {outcomes, risks, confidence}
+
+Backend → Database: INSERT INTO scans
+Database → Backend: Success / Error
+
+Backend → Frontend: 200 OK (full results)
+Frontend → User: Display Results Page
+
+═══════════════════════════════════════════════════════════════════════════════════════════
+
+🎯 TOTAL FLOW TIME: ~2-4 seconds (quality check → face detection → inference → routine → response)
+📲 Response Size: ~500KB-2MB (includes base64 heatmap images)

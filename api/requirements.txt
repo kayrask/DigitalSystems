@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pillow
+torch
+torchvision
+numpy
+mysql-connector-python
+openpyxl
+mediapipe
+opencv-python
+
