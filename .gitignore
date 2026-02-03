@@ -16,6 +16,7 @@ node_modules/
 *.log
 
 # Data and artifacts
+New Folder With Items/*.zip
 uploads/
 data/
 processed/
