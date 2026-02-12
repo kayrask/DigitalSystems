@@ -36,8 +36,12 @@ class SkinModel:
         self.thresholds_by_tone = None
         self.tone_conf_min = 1.0
 
-        tone_thr_path = os.path.join("models", "per_class_thresholds_by_tone.json")
-        if os.path.exists(tone_thr_path):
+        tone_thr_candidates = [
+            os.path.join("models", "per_class_thresholds_by_tone_tuned.json"),
+            os.path.join("models", "per_class_thresholds_by_tone.json"),
+        ]
+        tone_thr_path = next((p for p in tone_thr_candidates if os.path.exists(p)), None)
+        if tone_thr_path:
             try:
                 with open(tone_thr_path, "r") as f:
                     j = json.load(f)

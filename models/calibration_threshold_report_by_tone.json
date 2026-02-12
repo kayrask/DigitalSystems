@@ -1,0 +1,351 @@
+{
+  "generated_at_utc": "2026-02-12T00:10:47.043270",
+  "split": "val",
+  "tone_conf_min": 0.8,
+  "labels": [
+    "acne",
+    "bags",
+    "blackheads",
+    "hyperpigmentation",
+    "redness"
+  ],
+  "tone_classes": [
+    "Black",
+    "Brown",
+    "White"
+  ],
+  "guards": {
+    "min_samples": 30,
+    "min_pos": 8
+  },
+  "thresholds_current": {
+    "default": {
+      "acne": 0.05,
+      "bags": 0.1,
+      "blackheads": 0.65,
+      "hyperpigmentation": 0.44999999999999996,
+      "redness": 0.49999999999999994
+    },
+    "Black": {
+      "acne": 0.1,
+      "bags": 0.39,
+      "blackheads": 0.78,
+      "hyperpigmentation": 0.29,
+      "redness": 0.34
+    },
+    "Brown": {
+      "acne": 0.56,
+      "bags": 0.39,
+      "blackheads": 0.34,
+      "hyperpigmentation": 0.81,
+      "redness": 0.34
+    },
+    "White": {
+      "acne": 0.56,
+      "bags": 0.39,
+      "blackheads": 0.34,
+      "hyperpigmentation": 0.81,
+      "redness": 0.34
+    }
+  },
+  "thresholds_tuned": {
+    "default": {
+      "acne": 0.563,
+      "bags": 0.1,
+      "blackheads": 0.428,
+      "hyperpigmentation": 0.815,
+      "redness": 0.5
+    },
+    "Black": {
+      "acne": 0.059,
+      "bags": 0.1,
+      "blackheads": 0.779,
+      "hyperpigmentation": 0.293,
+      "redness": 0.5
+    },
+    "Brown": {
+      "acne": 0.56,
+      "bags": 0.39,
+      "blackheads": 0.34,
+      "hyperpigmentation": 0.81,
+      "redness": 0.34
+    },
+    "White": {
+      "acne": 0.05,
+      "bags": 0.1,
+      "blackheads": 0.65,
+      "hyperpigmentation": 0.45,
+      "redness": 0.5
+    }
+  },
+  "metrics_current": {
+    "default": {
+      "acne": {
+        "precision": 0.7478260869565218,
+        "recall": 1.0,
+        "f1": 0.8557213930348259,
+        "support_pos": 86,
+        "support_total": 223,
+        "threshold": 0.05
+      },
+      "bags": {
+        "precision": 0.18181818181818182,
+        "recall": 1.0,
+        "f1": 0.3076923076923077,
+        "support_pos": 6,
+        "support_total": 223,
+        "threshold": 0.1
+      },
+      "blackheads": {
+        "precision": 0.9836065573770492,
+        "recall": 0.9523809523809523,
+        "f1": 0.967741935483871,
+        "support_pos": 63,
+        "support_total": 223,
+        "threshold": 0.65
+      },
+      "hyperpigmentation": {
+        "precision": 0.9090909090909091,
+        "recall": 0.967741935483871,
+        "f1": 0.9375,
+        "support_pos": 62,
+        "support_total": 223,
+        "threshold": 0.44999999999999996
+      },
+      "redness": {
+        "precision": 1.0,
+        "recall": 0.3333333333333333,
+        "f1": 0.5,
+        "support_pos": 6,
+        "support_total": 223,
+        "threshold": 0.49999999999999994
+      }
+    },
+    "Black": {
+      "acne": {
+        "precision": 0.9142857142857143,
+        "recall": 0.9411764705882353,
+        "f1": 0.927536231884058,
+        "support_pos": 34,
+        "support_total": 81,
+        "threshold": 0.1
+      },
+      "bags": {
+        "precision": 0.1111111111111111,
+        "recall": 1.0,
+        "f1": 0.2,
+        "support_pos": 1,
+        "support_total": 81,
+        "threshold": 0.39
+      },
+      "blackheads": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support_pos": 19,
+        "support_total": 81,
+        "threshold": 0.78
+      },
+      "hyperpigmentation": {
+        "precision": 0.9642857142857143,
+        "recall": 1.0,
+        "f1": 0.9818181818181818,
+        "support_pos": 27,
+        "support_total": 81,
+        "threshold": 0.29
+      },
+      "redness": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support_pos": 0,
+        "support_total": 81,
+        "threshold": 0.34
+      }
+    },
+    "Brown": {
+      "acne": null,
+      "bags": null,
+      "blackheads": null,
+      "hyperpigmentation": null,
+      "redness": null
+    },
+    "White": {
+      "acne": {
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1": 0.8888888888888888,
+        "support_pos": 4,
+        "support_total": 13,
+        "threshold": 0.56
+      },
+      "bags": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6666666666666666,
+        "support_pos": 1,
+        "support_total": 13,
+        "threshold": 0.39
+      },
+      "blackheads": {
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8,
+        "support_pos": 3,
+        "support_total": 13,
+        "threshold": 0.34
+      },
+      "hyperpigmentation": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support_pos": 4,
+        "support_total": 13,
+        "threshold": 0.81
+      },
+      "redness": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support_pos": 1,
+        "support_total": 13,
+        "threshold": 0.34
+      }
+    }
+  },
+  "metrics_tuned": {
+    "default": {
+      "acne": {
+        "precision": 0.9512195121951219,
+        "recall": 0.9069767441860465,
+        "f1": 0.9285714285714286,
+        "support_pos": 86,
+        "support_total": 223,
+        "threshold": 0.5630000000000001
+      },
+      "bags": {
+        "precision": 0.18181818181818182,
+        "recall": 1.0,
+        "f1": 0.3076923076923077,
+        "support_pos": 6,
+        "support_total": 223,
+        "threshold": 0.1
+      },
+      "blackheads": {
+        "precision": 0.96875,
+        "recall": 0.9841269841269841,
+        "f1": 0.9763779527559056,
+        "support_pos": 63,
+        "support_total": 223,
+        "threshold": 0.42799999999999994
+      },
+      "hyperpigmentation": {
+        "precision": 1.0,
+        "recall": 0.9032258064516129,
+        "f1": 0.9491525423728814,
+        "support_pos": 62,
+        "support_total": 223,
+        "threshold": 0.815
+      },
+      "redness": {
+        "precision": 1.0,
+        "recall": 0.3333333333333333,
+        "f1": 0.5,
+        "support_pos": 6,
+        "support_total": 223,
+        "threshold": 0.49999999999999994
+      }
+    },
+    "Black": {
+      "acne": {
+        "precision": 0.918918918918919,
+        "recall": 1.0,
+        "f1": 0.9577464788732394,
+        "support_pos": 34,
+        "support_total": 81,
+        "threshold": 0.059000000000000004
+      },
+      "bags": {
+        "precision": 0.0625,
+        "recall": 1.0,
+        "f1": 0.11764705882352941,
+        "support_pos": 1,
+        "support_total": 81,
+        "threshold": 0.1
+      },
+      "blackheads": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support_pos": 19,
+        "support_total": 81,
+        "threshold": 0.779
+      },
+      "hyperpigmentation": {
+        "precision": 0.9642857142857143,
+        "recall": 1.0,
+        "f1": 0.9818181818181818,
+        "support_pos": 27,
+        "support_total": 81,
+        "threshold": 0.293
+      },
+      "redness": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support_pos": 0,
+        "support_total": 81,
+        "threshold": 0.49999999999999994
+      }
+    },
+    "Brown": {
+      "acne": null,
+      "bags": null,
+      "blackheads": null,
+      "hyperpigmentation": null,
+      "redness": null
+    },
+    "White": {
+      "acne": {
+        "precision": 0.5714285714285714,
+        "recall": 1.0,
+        "f1": 0.7272727272727273,
+        "support_pos": 4,
+        "support_total": 13,
+        "threshold": 0.05
+      },
+      "bags": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6666666666666666,
+        "support_pos": 1,
+        "support_total": 13,
+        "threshold": 0.1
+      },
+      "blackheads": {
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8,
+        "support_pos": 3,
+        "support_total": 13,
+        "threshold": 0.65
+      },
+      "hyperpigmentation": {
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1": 0.8888888888888888,
+        "support_pos": 4,
+        "support_total": 13,
+        "threshold": 0.44999999999999996
+      },
+      "redness": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support_pos": 1,
+        "support_total": 13,
+        "threshold": 0.49999999999999994
+      }
+    }
+  }
+}
