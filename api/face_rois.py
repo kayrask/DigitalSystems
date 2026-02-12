@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Optional
 import numpy as np
 from PIL import Image
+from PIL import ImageDraw
 import mediapipe as mp
 
 _mp_mesh = mp.solutions.face_mesh
@@ -23,6 +24,8 @@ RIGHT_CHEEK_LM = [280, 330, 425, 426]
 
 # Lips / mouth landmarks
 LIPS_LM = [61, 291, 0, 17, 13, 14, 78, 308]
+LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291]
+LIPS_INNER = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308]
 
 # Forehead-ish references (top of face)
 FOREHEAD_LM = [10, 109, 338, 67, 297]  # approximate spread across upper face
@@ -34,6 +37,63 @@ JAW_LM = [234, 93, 132, 58, 172, 136, 150, 149, 378, 379, 365, 397, 288]
 
 def _pts(lms, idxs) -> np.ndarray:
     return np.array([[lms[i].x, lms[i].y] for i in idxs], dtype=np.float32)
+
+
+def _lm_to_px(lm, w: int, h: int) -> tuple[int, int]:
+    x = int(np.clip(lm.x, 0.0, 1.0) * (w - 1))
+    y = int(np.clip(lm.y, 0.0, 1.0) * (h - 1))
+    return x, y
+
+
+def build_mouth_moustache_exclusion_mask(
+    img_bgr_or_rgb: np.ndarray,
+    landmarks,
+    moustache_band: float = 0.35,
+    lip_expand: float = 0.08,
+) -> np.ndarray:
+    """
+    Returns uint8 mask (H,W) where 1 means exclude (mouth + moustache band).
+    """
+    h, w = img_bgr_or_rgb.shape[:2]
+    mask_img = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask_img)
+
+    outer = [_lm_to_px(landmarks[i], w, h) for i in LIPS_OUTER]
+    inner = [_lm_to_px(landmarks[i], w, h) for i in LIPS_INNER]
+
+    xs = [p[0] for p in outer]
+    ys = [p[1] for p in outer]
+    x0, y0 = min(xs), min(ys)
+    x1, y1 = max(xs), max(ys)
+    pad_x = int(lip_expand * max(1, (x1 - x0 + 1)))
+    pad_y = int(lip_expand * max(1, (y1 - y0 + 1)))
+    x0e, y0e = max(0, x0 - pad_x), max(0, y0 - pad_y)
+    x1e, y1e = min(w - 1, x1 + pad_x), min(h - 1, y1 + pad_y)
+
+    # Mouth polygon with inner part punched out.
+    draw.polygon(outer, fill=1)
+    draw.polygon(inner, fill=0)
+
+    arr = np.array(mask_img, dtype=np.uint8)
+    arr[y0e : y1e + 1, x0e : x1e + 1] = np.maximum(arr[y0e : y1e + 1, x0e : x1e + 1], 1)
+
+    # Moustache band above upper lip bbox.
+    mouth_h = max(1, (y1 - y0 + 1))
+    band_h = int(moustache_band * mouth_h)
+    band_y0 = max(0, y0 - band_h)
+    band_y1 = y0
+    arr[band_y0 : band_y1 + 1, x0e : x1e + 1] = 1
+    return arr
+
+
+def apply_exclusion_mask_pil(
+    img: Image.Image, exclude_mask_hw: np.ndarray, fill_rgb=(127, 127, 127)
+) -> Image.Image:
+    arr = np.array(img).copy()
+    m = exclude_mask_hw.astype(bool)
+    if arr.ndim == 3 and arr.shape[2] == 3:
+        arr[m] = np.array(fill_rgb, dtype=arr.dtype)
+    return Image.fromarray(arr)
 
 
 def _bbox_from_points(pts_xy: np.ndarray, w: int, h: int, pad: float = 0.25) -> Tuple[int, int, int, int]:
@@ -95,6 +155,8 @@ def extract_rois_with_boxes(face_img: Image.Image) -> Dict[str, Dict]:
 
     lms = out.multi_face_landmarks[0].landmark
     rois: Dict[str, Dict] = {}
+    exclude_mouth = build_mouth_moustache_exclusion_mask(arr, lms)
+    rois["exclude_mouth_moustache_mask"] = exclude_mouth
 
     # -----------------
     # Nose + T-zone ROIs
@@ -134,13 +196,6 @@ def extract_rois_with_boxes(face_img: Image.Image) -> Dict[str, Dict]:
         height = (ey2 - ey1)
         y1n = int(min(h - 1, ey1 + height * shift_down))
         y2n = int(min(h, ey2 + height * (shift_down + extra_down)))
-        return (ex1, y1n, ex2, y2n)
-        y2n = int(min(h, ey2 + height * (shift_down + 0.90)))
-
-        # enforce minimum height so overlay isn't razor-thin
-        if y2n - y1n < 24:
-            y2n = min(h, y1n + 24)
-
         return (ex1, y1n, ex2, y2n)
 
     under_l = under_eye_box(LEFT_EYE_LM)
@@ -209,4 +264,4 @@ def extract_rois(face_img: Image.Image) -> Dict[str, Optional[Image.Image]]:
       {"t_zone": PIL.Image, ...}
     """
     rois = extract_rois_with_boxes(face_img)
-    return {k: v["img"] for k, v in rois.items()}
+    return {k: v["img"] for k, v in rois.items() if isinstance(v, dict) and "img" in v}

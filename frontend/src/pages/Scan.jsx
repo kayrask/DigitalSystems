@@ -76,13 +76,18 @@ function Scan() {
     if (r.startsWith("blurry")) return "Blurry (hold still / focus)";
     if (r.startsWith("low_contrast")) return "Low contrast (even lighting needed)";
     if (r.startsWith("low_resolution")) return "Low resolution (use higher quality image)";
+    if (r.startsWith("face_too_small")) return "Face too small in frame (move closer)";
+    if (r.startsWith("face_off_center")) return "Face is off-center (align inside guide)";
     return r;
   };
 
-  const buildQualityMessage = (quality) => {
+  const buildQualityMessage = (quality, retakeGuidance = []) => {
     const reasons = (quality?.reasons || []).map(prettyQualityReason);
-    if (!reasons.length) return "Image quality too low. Please retake.";
-    return `Retake required: ${reasons.join(" • ")}`;
+    const tips = (retakeGuidance || []).filter(Boolean);
+    if (!reasons.length && !tips.length) return "Image quality too low. Please retake.";
+    const reasonText = reasons.length ? `Retake required: ${reasons.join(" • ")}` : "Retake required.";
+    const tipsText = tips.length ? ` Tips: ${tips.join(" • ")}` : "";
+    return `${reasonText}${tipsText}`;
   };
 
   const handleAnalyze = async () => {
@@ -118,7 +123,7 @@ function Scan() {
       // Phase 1 quality gate (and also face-not-found messages)
       if (data?.ok === false) {
         if (data?.quality?.passed === false) {
-          setError(buildQualityMessage(data.quality));
+          setError(buildQualityMessage(data.quality, data.retake_guidance));
         } else if (data?.message) {
           setError(String(data.message));
         } else {

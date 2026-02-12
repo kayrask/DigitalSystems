@@ -135,14 +135,30 @@ function History() {
         params: { scan_id: scanId, target },
       });
 
-      const b64 = res.data?.overlay_png_base64;
-      if (!b64) {
-        setExplainError("No overlay returned.");
-        return;
+      if (res.data?.type === "overlay") {
+        const b64 = res.data?.overlay_png_base64;
+        if (!b64) {
+          setExplainError("No overlay returned.");
+          return;
+        }
+        setExplainOverlay(b64);
+        setExplainCache((prev) => ({ ...prev, [key]: b64 }));
+      } else if (res.data?.type === "boxes") {
+        // Store detections data for rendering
+        const detectionData = {
+          type: "boxes",
+          source: res.data.source,
+          image_png_base64: res.data.image_png_base64,
+          detections: res.data.detections || [],
+          detection_count: res.data.detection_count || res.data.detections?.length || 0,
+          face_size: res.data.face_size,
+          full_size: res.data.full_size,
+        };
+        setExplainOverlay(detectionData);
+        setExplainCache((prev) => ({ ...prev, [key]: detectionData }));
+      } else {
+        setExplainError("Unknown explain response type.");
       }
-
-      setExplainOverlay(b64);
-      setExplainCache((prev) => ({ ...prev, [key]: b64 }));
     } catch (err) {
       console.error("Explain failed:", err);
       const msg =
@@ -342,19 +358,65 @@ function History() {
 
         {explainOverlay && (
           <div style={{ marginTop: 12 }}>
-            <img
-              src={`data:image/png;base64,${explainOverlay}`}
-              alt="Explainability overlay"
-              style={{
-                width: "100%",
-                borderRadius: 12,
-                border: "1px solid rgba(0,0,0,0.08)",
-                display: "block",
-              }}
-            />
-            <p style={{ fontSize: 11, opacity: 0.65, marginTop: 8, marginBottom: 0 }}>
-              Warmer (redder) regions contributed more to the selected prediction.
-            </p>
+            {typeof explainOverlay === "string" ? (
+              // Overlay type: base64 PNG (Grad-CAM)
+              <>
+                <img
+                  src={`data:image/png;base64,${explainOverlay}`}
+                  alt="Explainability overlay"
+                  style={{
+                    width: "100%",
+                    borderRadius: 12,
+                    border: "1px solid rgba(0,0,0,0.08)",
+                    display: "block",
+                  }}
+                />
+                <p style={{ fontSize: 11, opacity: 0.65, marginTop: 8, marginBottom: 0 }}>
+                  Warmer (redder) regions contributed more to the selected prediction.
+                </p>
+              </>
+            ) : explainOverlay?.type === "boxes" ? (
+              // Boxes type: YOLO detections with boxed image
+              <div>
+                <p style={{ fontSize: 13, marginBottom: 8, fontWeight: 500 }}>
+                  {explainOverlay.source === "detector" ? "🎯 " : "📊 "}
+                  <strong>{explainTarget}</strong> — {explainOverlay.detection_count || 0} detection(s)
+                </p>
+                
+                {/* Display boxed image if available */}
+                {explainOverlay.image_png_base64 && (
+                  <img
+                    src={`data:image/png;base64,${explainOverlay.image_png_base64}`}
+                    alt={`${explainTarget} detections`}
+                    style={{
+                      width: "100%",
+                      maxWidth: 500,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      borderRadius: 6,
+                      marginBottom: 12,
+                      display: "block",
+                    }}
+                  />
+                )}
+                
+                {explainOverlay.detections?.length === 0 ? (
+                  <p style={{ fontSize: 11, opacity: 0.65, fontStyle: "italic" }}>
+                    No localized findings detected. This condition may be diffuse or not present at this confidence level.
+                  </p>
+                ) : (
+                  <ul style={{ fontSize: 11, paddingLeft: 20, margin: 0 }}>
+                    {explainOverlay.detections.map((d, i) => (
+                      <li key={i} style={{ marginBottom: 4 }}>
+                        <strong>{d.label}</strong> — {(d.confidence * 100).toFixed(1)}% confidence
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p style={{ fontSize: 10, opacity: 0.55, marginTop: 8, marginBottom: 0, fontStyle: "italic" }}>
+                  Detection-based localization (YOLO object detector).
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

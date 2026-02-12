@@ -1,0 +1,894 @@
+{
+  "generated_at_utc": "2026-02-12T00:29:52.008360",
+  "api": "http://127.0.0.1:8000/predict",
+  "summary": {
+    "total": 30,
+    "passed": 30,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "cases": [
+    {
+      "id": "case_001",
+      "image_path": "uploads/scan_20260212_001524_7870419257477ce7_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.3015948325395584,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.2972378730773926,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.018609864823520183,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.018435969948768616,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.04522504284977913,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_002",
+      "image_path": "uploads/scan_20260212_001420_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_003",
+      "image_path": "uploads/scan_20260212_001321_6f11f38928f5e6ae_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.6867703199386597,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.465025395154953,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.008632932510226964,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.01710248738527298,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.18957464396953583,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_004",
+      "image_path": "uploads/scan_20260212_001321_0bcb20d3d8633e71_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.26371262371540066,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.2452985048294067,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005485023371875286,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.1115565374493599,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.0060302517376840115,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_005",
+      "image_path": "uploads/scan_20260212_001320_0bcb20d3d8633e71_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.26371262371540066,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.2452985048294067,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005485023371875286,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.1115565374493599,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.0060302517376840115,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_006",
+      "image_path": "uploads/scan_20260212_000207_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_007",
+      "image_path": "uploads/scan_20260212_000136_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_008",
+      "image_path": "uploads/scan_20260210_113428_06ea11aa8b627d93_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.740568220615387,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.3362880349159241,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.006878047343343496,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.013290141709148884,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.24990098178386688,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_009",
+      "image_path": "uploads/scan_20260210_113416_22febd021d097d8e_face_raw.jpg",
+      "ok": true,
+      "errors": [
+        "Image quality too low. Please retake using the guidance provided."
+      ],
+      "violations": [],
+      "results": null,
+      "quality": {
+        "passed": false,
+        "reasons": [
+          "blurry (blur_var=0.000312)"
+        ],
+        "metrics": {
+          "width": 2616,
+          "height": 3295,
+          "short_side": 2616,
+          "brightness": 0.4529404044151306,
+          "contrast": 0.20738478004932404,
+          "blur_var": 0.00031226497958414257,
+          "face_area_ratio": 1.0,
+          "face_center_offset": 0.0
+        },
+        "thresholds": {
+          "min_short_side": 240,
+          "brightness_min": 0.2,
+          "brightness_max": 0.85,
+          "contrast_min": 0.05,
+          "blur_var_min": 0.0015,
+          "face_area_ratio_min": 0.1,
+          "face_center_offset_max": 0.22
+        }
+      }
+    },
+    {
+      "id": "case_010",
+      "image_path": "uploads/scan_20260204_210514_bc5c1e7e2a6fba37_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.6622982025146484,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.5866761803627014,
+          "prediction": 1
+        },
+        "blackheads": {
+          "probability": 0.008352064620703458,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.005224544554948807,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.48187509179115295,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_011",
+      "image_path": "uploads/scan_20260204_210405_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_012",
+      "image_path": "uploads/scan_20260204_210110_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_013",
+      "image_path": "uploads/scan_20260204_204607_ce4ee0db35c95634_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.263647785782814,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.24266128242015836,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.005483875330537557,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.11150042712688446,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.006031426135450602,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_014",
+      "image_path": "uploads/scan_20260204_204556_8468e3d671d802b4_face_raw.jpg",
+      "ok": true,
+      "errors": [
+        "Image quality too low. Please retake using the guidance provided."
+      ],
+      "violations": [],
+      "results": null,
+      "quality": {
+        "passed": false,
+        "reasons": [
+          "blurry (blur_var=0.001418)"
+        ],
+        "metrics": {
+          "width": 910,
+          "height": 910,
+          "short_side": 910,
+          "brightness": 0.48447757959365845,
+          "contrast": 0.1454099863767624,
+          "blur_var": 0.001417562598362565,
+          "face_area_ratio": 0.9826467503002169,
+          "face_center_offset": 0.006889493813003005
+        },
+        "thresholds": {
+          "min_short_side": 240,
+          "brightness_min": 0.2,
+          "brightness_max": 0.85,
+          "contrast_min": 0.05,
+          "blur_var_min": 0.0015,
+          "face_area_ratio_min": 0.1,
+          "face_center_offset_max": 0.22
+        }
+      }
+    },
+    {
+      "id": "case_015",
+      "image_path": "uploads/scan_20260204_204516_7870419257477ce7_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.3015948325395584,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.2972378730773926,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.018609864823520183,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.018435969948768616,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.04522504284977913,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_016",
+      "image_path": "uploads/scan_20260204_204420_a679767772f15b9a_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.6992188096046448,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.19266900420188904,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.006776118744164705,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.0177212692797184,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.595430314540863,
+          "prediction": 1
+        }
+      }
+    },
+    {
+      "id": "case_017",
+      "image_path": "uploads/scan_20260204_203523_a679767772f15b9a_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.6992188096046448,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.19266900420188904,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.006776118744164705,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.0177212692797184,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.595430314540863,
+          "prediction": 1
+        }
+      }
+    },
+    {
+      "id": "case_018",
+      "image_path": "uploads/scan_20260203_165617_7f4674b3026c6631_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.7677425742149353,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.4274887442588806,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.07456687167286873,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.029999203979969025,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.08966413140296936,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_019",
+      "image_path": "uploads/scan_20260203_164918_9347ceddab1feeb0_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.7684473991394043,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.42641013860702515,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.07459744438529015,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.03004581481218338,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.08952092379331589,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_020",
+      "image_path": "uploads/scan_20260203_164801_72300ffcd7e8443c_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.1101283237338066,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.8787338137626648,
+          "prediction": 1
+        },
+        "blackheads": {
+          "probability": 0.005947029497474432,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.016335392370820045,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.17987164855003357,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_021",
+      "image_path": "uploads/scan_20260203_164351_e3db38d4df7f978c_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.6926530003547668,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.2953656315803528,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.023603124916553496,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.033887557685375214,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.06662095338106155,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_022",
+      "image_path": "uploads/scan_20260203_004949_7f4674b3026c6631_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.7677425742149353,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.4274887442588806,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.07456687167286873,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.029999203979969025,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.08966413140296936,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_023",
+      "image_path": "uploads/scan_20260203_004909_7586ffa34e1b076e_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.7367852926254272,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.15000398457050323,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.029640714079141615,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.09539340436458588,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.07202187925577164,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_024",
+      "image_path": "uploads/scan_20260203_004857_7586ffa34e1b076e_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.7367852926254272,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.15000398457050323,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.029640714079141615,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.09539340436458588,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.07202187925577164,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_025",
+      "image_path": "uploads/scan_20260202_225626_72300ffcd7e8443c_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.1101283237338066,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.8787338137626648,
+          "prediction": 1
+        },
+        "blackheads": {
+          "probability": 0.005947029497474432,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.016335392370820045,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.17987164855003357,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_026",
+      "image_path": "uploads/scan_20260202_224652_4e1463b66287a7ec_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.07998028099536895,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.2774915814399719,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.020647061243653297,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.1637689173221588,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.03477734699845314,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_027",
+      "image_path": "uploads/scan_20260202_224433_a922bcb2e93c4c13_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.4418018162250519,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.5119327902793884,
+          "prediction": 1
+        },
+        "blackheads": {
+          "probability": 0.014584495499730109,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.34643954038619995,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.39335110783576965,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_028",
+      "image_path": "uploads/scan_20260202_224125_e1f3ec3f17dd7ebc_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.4438234567642212,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.07755814492702484,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.015303462743759154,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.35531219840049744,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.3977189362049103,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_029",
+      "image_path": "uploads/scan_20260202_223923_481c19a6653bf938_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.28440842032432556,
+          "prediction": 0
+        },
+        "bags": {
+          "probability": 0.23350249230861664,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.016143667325377465,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.39729708433151245,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.3731420636177063,
+          "prediction": 0
+        }
+      }
+    },
+    {
+      "id": "case_030",
+      "image_path": "uploads/scan_20260202_223344_2e3392ba9a400422_face_raw.jpg",
+      "ok": true,
+      "errors": [],
+      "violations": [],
+      "results": {
+        "acne": {
+          "probability": 0.5843479633331299,
+          "prediction": 1
+        },
+        "bags": {
+          "probability": 0.22058703005313873,
+          "prediction": 0
+        },
+        "blackheads": {
+          "probability": 0.009592462982982396,
+          "prediction": 0
+        },
+        "hyperpigmentation": {
+          "probability": 0.13506224751472473,
+          "prediction": 0
+        },
+        "redness": {
+          "probability": 0.3138295114040375,
+          "prediction": 0
+        }
+      }
+    }
+  ]
+}

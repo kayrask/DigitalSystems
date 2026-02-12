@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from api.inference import SkinModel, SkinTypeModel, SkinToneModel, LABELS
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 from pydantic import BaseModel
 from api.recommender import recommend_routine
 from typing import Optional, List
@@ -10,8 +10,9 @@ from api.safety_filter import filter_routine_for_user
 from api.outcome_risk import compute_outcome_and_risk
 from api.explainability import gradcam_overlay_base64
 from api.face_crop import crop_face, apply_oval_mask
-from api.face_rois import extract_rois_with_boxes  
+from api.face_rois import extract_rois_with_boxes, apply_exclusion_mask_pil
 from api.face_parse import FaceParser, apply_skin_mask
+from api.yolo_detector import YoloSkinDetector
 from datetime import datetime
 
 
@@ -27,6 +28,80 @@ from mysql.connector import Error, IntegrityError
 
 app = FastAPI()
 
+# --- Coordinate conversion helpers ---
+def clamp_box(box, w, h):
+    """Clamp bounding box to image bounds."""
+    x1, y1, x2, y2 = box
+    x1 = max(0, min(w - 1, int(round(x1))))
+    y1 = max(0, min(h - 1, int(round(y1))))
+    x2 = max(0, min(w, int(round(x2))))
+    y2 = max(0, min(h, int(round(y2))))
+    if x2 <= x1:
+        x2 = min(w, x1 + 1)
+    if y2 <= y1:
+        y2 = min(h, y1 + 1)
+    return [x1, y1, x2, y2]
+
+def face_box_to_full(box_face, face_size, full_face_bbox):
+    """
+    Convert bounding box from face crop coordinates to full image coordinates.
+    
+    Args:
+        box_face: [x1, y1, x2, y2] in face crop pixels
+        face_size: (face_width, face_height)
+        full_face_bbox: {"x": int, "y": int, "w": int, "h": int} of face crop in full image
+        
+    Returns:
+        [X1, Y1, X2, Y2] in full image pixels
+    """
+    fw, fh = face_size
+    bx = int(full_face_bbox["x"])
+    by = int(full_face_bbox["y"])
+    bw = int(full_face_bbox["w"])
+    bh = int(full_face_bbox["h"])
+
+    sx = bw / max(1, fw)
+    sy = bh / max(1, fh)
+
+    x1, y1, x2, y2 = box_face
+    X1 = bx + x1 * sx
+    Y1 = by + y1 * sy
+    X2 = bx + x2 * sx
+    Y2 = by + y2 * sy
+    return [float(X1), float(Y1), float(X2), float(Y2)]
+
+def draw_boxes(pil_img: Image.Image, boxes: List[dict], line_width: int = 3, label_color: str = "red", box_color: str = "red") -> Image.Image:
+    """
+    Draw bounding boxes with labels on a PIL image.
+    
+    Args:
+        pil_img: PIL Image to draw on
+        boxes: List of dicts with keys: "box" ([x1, y1, x2, y2]), "label" (str), "conf" (float)
+        line_width: Thickness of box outline
+        label_color: Color of text and box outline
+        box_color: Color of box outline
+        
+    Returns:
+        PIL Image (RGB) with boxes drawn
+    """
+    out = pil_img.convert("RGB").copy()
+    d = ImageDraw.Draw(out)
+    
+    for b in boxes:
+        x1, y1, x2, y2 = [int(v) for v in b["box"]]
+        label = b.get("label", "unknown")
+        conf = b.get("conf", 0.0)
+        text_label = f"{label} {conf:.0%}"
+        
+        # Draw rectangle
+        d.rectangle([x1, y1, x2, y2], outline=box_color, width=line_width)
+        
+        # Draw text with background
+        text_y = max(0, y1 - 16)
+        d.text((x1, text_y), text_label, fill=label_color)
+    
+    return out
+
 # --- ROI map for region-aware inference/explainability ---
 LABEL_TO_ROIS = {
     "blackheads": ["nose", "t_zone"],
@@ -35,6 +110,17 @@ LABEL_TO_ROIS = {
 
 DIFFUSE = {"acne", "redness", "hyperpigmentation"}
 LOCAL = {"blackheads", "bags"}
+SENSITIVE_TARGETS = {"acne", "redness", "hyperpigmentation"}
+NO_EXCLUDE_ROIS = {"nose"}
+
+# YOLO class id mapping (from your data.yaml)
+YOLO_CLASS_IDS = {
+    "acne": {0},
+    "blackheads": {1},
+    "hyperpigmentation": {2},  # Dark-Spots
+    "bags": {5},               # Eyebags
+    "redness": {7},            # Skin-Redness
+}
 
 def compute_shadow_score(face_img: Image.Image) -> float:
     """
@@ -49,6 +135,142 @@ def compute_shadow_score(face_img: Image.Image) -> float:
     right = gray[:, w // 2 :].mean()
     denom = max((left + right) / 2.0, 1.0)
     return float(abs(left - right) / denom)
+
+
+def _add_face_pose_quality_checks(quality: dict, face_meta: dict, full_img: Image.Image) -> dict:
+    """
+    Adds simple distance/centering checks based on detected face bbox.
+    """
+    out = dict(quality)
+    out.setdefault("reasons", [])
+    out.setdefault("metrics", {})
+    out.setdefault("thresholds", {})
+
+    bbox = (face_meta or {}).get("bbox") or {}
+    fx = float(bbox.get("x", 0))
+    fy = float(bbox.get("y", 0))
+    fw = float(bbox.get("w", 0))
+    fh = float(bbox.get("h", 0))
+    W, H = full_img.size
+
+    if fw > 0 and fh > 0 and W > 0 and H > 0:
+        face_area_ratio = (fw * fh) / float(max(1, W * H))
+        face_cx = fx + fw / 2.0
+        face_cy = fy + fh / 2.0
+        img_cx = W / 2.0
+        img_cy = H / 2.0
+        center_offset = float(
+            np.sqrt((face_cx - img_cx) ** 2 + (face_cy - img_cy) ** 2)
+            / max(1.0, np.sqrt(img_cx**2 + img_cy**2))
+        )
+
+        out["metrics"]["face_area_ratio"] = face_area_ratio
+        out["metrics"]["face_center_offset"] = center_offset
+        out["thresholds"]["face_area_ratio_min"] = 0.10
+        out["thresholds"]["face_center_offset_max"] = 0.22
+
+        if face_area_ratio < 0.10:
+            out["reasons"].append(f"face_too_small (face_area_ratio={face_area_ratio:.3f})")
+        if center_offset > 0.22:
+            out["reasons"].append(f"face_off_center (offset={center_offset:.3f})")
+
+    out["passed"] = len(out["reasons"]) == 0
+    return out
+
+
+def _retake_guidance_from_quality(quality: dict) -> list[str]:
+    reasons = quality.get("reasons", [])
+    tips = []
+    for r in reasons:
+        if r.startswith("too_dark"):
+            tips.append("Increase front lighting and avoid backlight.")
+        elif r.startswith("too_bright"):
+            tips.append("Avoid direct flash/sun glare; use softer, even light.")
+        elif r.startswith("blurry"):
+            tips.append("Hold phone steady and clean the camera lens.")
+        elif r.startswith("low_contrast"):
+            tips.append("Use neutral, even lighting to improve skin detail.")
+        elif r.startswith("low_resolution"):
+            tips.append("Move closer so your face fills most of the frame.")
+        elif r.startswith("face_too_small"):
+            tips.append("Move closer; keep your full face large and centered.")
+        elif r.startswith("face_off_center"):
+            tips.append("Center your face in the guide oval before scanning.")
+
+    # dedupe while preserving order
+    seen = set()
+    out = []
+    for t in tips:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> tuple[dict, dict]:
+    """
+    Suppress weak positives and expose uncertainty diagnostics.
+    """
+    gated = {}
+    uncertainty = {}
+    # Conservative floors for "present" decisions to avoid low-threshold false positives.
+    min_positive_prob = {
+        "acne": 0.55,
+        "bags": 0.50,
+        "blackheads": 0.45,
+        "hyperpigmentation": 0.55,
+        "redness": 0.55,
+    }
+
+    acne_recall_floor = 0.58
+
+    for label, v in results.items():
+        prob = float(v["probability"])
+        thr = float(thr_map.get(label, 0.5))
+        pred = int(v["prediction"])
+
+        # Rescue high-confidence acne misses caused by aggressive tone thresholds.
+        if label == "acne" and pred == 0 and prob >= acne_recall_floor:
+            pred = 1
+
+        margin = abs(prob - thr)
+        near_threshold = margin < 0.06
+        below_floor = pred == 1 and prob < float(min_positive_prob.get(label, 0.5))
+        # keep this rule only for localized labels; diffuse labels should not be over-suppressed here
+        weak_positive = label in LOCAL and pred == 1 and prob < max(0.45, thr + 0.04)
+        yolo_disagree = label in LOCAL and pred == 1 and det_count.get(label, 0) == 0 and prob < 0.65
+
+        suppressed = False
+        reasons = []
+        if near_threshold:
+            reasons.append("near_threshold")
+        if below_floor:
+            reasons.append("below_label_floor")
+        if weak_positive:
+            reasons.append("weak_positive")
+        if yolo_disagree:
+            reasons.append("yolo_disagree")
+
+        suppress_reasons = {"below_label_floor", "weak_positive", "yolo_disagree"}
+        if any(r in suppress_reasons for r in reasons):
+            pred = 0
+            suppressed = True
+
+        gated[label] = {
+            "probability": prob,
+            "prediction": pred,
+        }
+        uncertainty[label] = {
+            "threshold": thr,
+            "floor": float(min_positive_prob.get(label, 0.5)),
+            "margin": margin,
+            "suppressed": suppressed,
+            "reasons": reasons,
+            "confidence_band": (
+                "high" if margin >= 0.15 else "medium" if margin >= 0.08 else "low"
+            ),
+        }
+    return gated, uncertainty
 
 # === MySQL CONFIG ===
 MYSQL_HOST = "localhost"
@@ -197,6 +419,7 @@ THRESHOLDS_PATH = "models/per_class_thresholds.json"
 SKIN_TYPE_MODEL_PATH = "models/skin_type_resnet18.pt"
 SKIN_TONE_MODEL_PATH = "models/skin_tone_resnet18.pt"
 FACE_PARSING_CKPT = "models/bisenet_face_parsing.pth"
+YOLO_WEIGHTS_PATH = "models/yolo_skin_best.pt"
 
 # Multilabel skin condition model (acne, redness, etc.)
 model = SkinModel(
@@ -216,6 +439,9 @@ skin_tone_model = SkinToneModel(
 
 # Face parsing (skin-only masking)
 face_parser = FaceParser(ckpt_path=FACE_PARSING_CKPT)
+
+# YOLO detector (localized lesions)
+yolo_detector = YoloSkinDetector(YOLO_WEIGHTS_PATH, device="mps")
 
 
 @app.get("/")
@@ -277,12 +503,15 @@ async def predict(
 
     # === Phase 1 Quality Gate should run on the face crop ===
     quality = assess_image_quality(face_img, QualityConfig(min_short_side=240))
+    quality = _add_face_pose_quality_checks(quality, face_meta, image_full)
+    retake_guidance = _retake_guidance_from_quality(quality)
     if not quality["passed"]:
         return {
             "ok": False,
             "quality": quality,
             "face": face_meta,
-            "message": "Image quality too low. Please retake in better lighting and focus.",
+            "retake_guidance": retake_guidance,
+            "message": "Image quality too low. Please retake using the guidance provided.",
             "image_path_full": full_path,
             "image_path_face": image_path,
             "image_path_face_raw": image_path_face_raw,
@@ -295,7 +524,12 @@ async def predict(
     skin_type = skin_type_out["skin_type"]
 
     # Extract ROIs (auto from FaceMesh)
-    rois = extract_rois_with_boxes(face_img_raw)
+    try:
+        rois = extract_rois_with_boxes(face_img_raw)
+    except Exception as e:
+        print("ROI extraction failed:", e)
+        rois = {}
+    exclusion_mask = rois.get("exclude_mouth_moustache_mask")
     # Base full-face prediction
     results_full = model.predict(
         skin_only_img,
@@ -326,8 +560,18 @@ async def predict(
             if not roi:
                 continue
 
+            roi_img = roi["img"]
+            if (
+                exclusion_mask is not None
+                and label in SENSITIVE_TARGETS
+                and rk not in NO_EXCLUDE_ROIS
+            ):
+                x1, y1, x2, y2 = roi["box"]
+                exclude_crop = exclusion_mask[y1:y2, x1:x2]
+                roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
+
             roi_pred = model.predict(
-                roi["img"],
+                roi_img,
                 tone_group=tone_out["group"],
                 tone_conf=tone_out["confidence"],
             )
@@ -343,6 +587,36 @@ async def predict(
             "probability": best_prob,
             "prediction": int(best_prob >= thr),
         }
+
+    # --- YOLO detection on face crop (for sanity + localization) ---
+    try:
+        yolo_boxes = yolo_detector.predict(
+            face_img_raw,
+            conf=0.10,
+            iou=0.45,
+            imgsz=512,
+            max_det=100,
+        )
+    except Exception as e:
+        print("YOLO predict failed:", e)
+        yolo_boxes = []
+
+    # Count detections by your labels
+    det_count = {k: 0 for k in results.keys()}
+    for b in yolo_boxes:
+        for lbl, ids in YOLO_CLASS_IDS.items():
+            if lbl in det_count and b["cls"] in ids and b["conf"] >= 0.10:
+                det_count[lbl] += 1
+
+    # Fusion: suppress acne/blackheads/bags when YOLO finds nothing
+    for lbl in ["acne", "blackheads", "bags"]:
+        if lbl in results and det_count.get(lbl, 0) == 0:
+            results[lbl]["probability"] = float(results[lbl]["probability"] * 0.35)
+            thr = float(thr_map.get(lbl, 0.5))
+            results[lbl]["prediction"] = int(results[lbl]["probability"] >= thr)
+
+    # Confidence/uncertainty gating to suppress weak detections
+    results, uncertainty = _apply_uncertainty_gating(results, thr_map, det_count)
 
     mapped_skin_type = skin_type
     if mapped_skin_type in ["dry", "sensitive"]:
@@ -375,11 +649,17 @@ async def predict(
         "ok": True,
         "face": face_meta,
         "quality": quality,
+        "retake_guidance": retake_guidance,
         "results": results,
+        "uncertainty": uncertainty,
         "skin_type": skin_type_out,
         "routine_raw": routine_raw,
         "routine": routine_filtered,
         "safety": safety,
+        "yolo": {
+            "boxes": yolo_boxes,
+            "counts": det_count,
+        },
         **phase3,
         "image_path_full": full_path,
         "image_path_face": image_path,
@@ -595,11 +875,74 @@ def explain(scan_id: int, target: str):
 
         full_img = ImageOps.exif_transpose(Image.open(full_path)).convert("RGB")
         face_img = ImageOps.exif_transpose(Image.open(face_path_to_use)).convert("RGB")
+
+        # If we have YOLO, use boxes for localized issues instead of Grad-CAM
+        LOCALIZED = {"acne", "blackheads", "bags"}
+        if target in LOCALIZED:
+            yolo_boxes = yolo_detector.predict(
+                face_img,
+                conf=0.10,
+                iou=0.45,
+                imgsz=512,
+                max_det=100,
+            )
+            ids = YOLO_CLASS_IDS.get(target, set())
+            filtered = [b for b in yolo_boxes if b["cls"] in ids]
+            
+            # Draw boxes on face image and return as base64
+            face_with_boxes = draw_boxes(
+                face_img,
+                filtered,
+                line_width=3,
+                box_color="red",
+                label_color="red"
+            )
+            
+            # Scale face image to fit within full image and overlay at face bbox location
+            bx, by = int(bbox["x"]), int(bbox["y"])
+            bw, bh = int(bbox["w"]), int(bbox["h"])
+            
+            full_img_copy = full_img.copy()
+            face_with_boxes_scaled = face_with_boxes.resize((bw, bh), Image.Resampling.LANCZOS)
+            full_img_copy.paste(face_with_boxes_scaled, (bx, by))
+            
+            # Convert full image with boxes to base64
+            full_b64 = pil_to_base64_png(full_img_copy)
+            
+            # Also compute detection count for response
+            face_w, face_h = face_img.size
+            full_w, full_h = full_img.size
+            detections = []
+            for d in filtered:
+                bf = clamp_box(d["box"], face_w, face_h)
+                bfull = face_box_to_full(bf, (face_w, face_h), bbox)
+                bfull = clamp_box(bfull, full_w, full_h)
+                detections.append({
+                    "label": d.get("label", f"class_{d['cls']}"),
+                    "class_id": d["cls"],
+                    "confidence": d["conf"],
+                    "bbox_face": bf,
+                    "bbox_full": bfull,
+                })
+            
+            return {
+                "ok": True,
+                "target": target,
+                "type": "boxes",
+                "source": "detector",
+                "image_png_base64": full_b64,
+                "detections": detections,
+                "face_size": {"w": face_w, "h": face_h},
+                "full_size": {"w": full_w, "h": full_h},
+                "detection_count": len(detections),
+            }
+
         skin_mask = face_parser.skin_mask(face_img)
         skin_only_img = apply_skin_mask(face_img, skin_mask)
 
         # 1) ROI-aware Grad-CAM (localized) or full-face Grad-CAM (diffuse)
         rois = extract_rois_with_boxes(face_img)
+        exclusion_mask = rois.get("exclude_mouth_moustache_mask")
         roi_keys = LABEL_TO_ROIS.get(target, [])
 
         shadow_score = compute_shadow_score(face_img)
@@ -609,7 +952,10 @@ def explain(scan_id: int, target: str):
         face_overlay_canvas = Image.new("RGBA", face_img.size, (0, 0, 0, 0))
 
         if not roi_keys:
-            out = gradcam_overlay_base64(model, skin_only_img, target_label=target)
+            explain_img = skin_only_img
+            if exclusion_mask is not None and target in SENSITIVE_TARGETS:
+                explain_img = apply_exclusion_mask_pil(explain_img, exclusion_mask)
+            out = gradcam_overlay_base64(model, explain_img, target_label=target)
             face_overlay_canvas = base64png_to_pil_rgba(out["overlay_png_base64"]).resize(
                 face_img.size
             ).convert("RGBA")
@@ -620,10 +966,24 @@ def explain(scan_id: int, target: str):
                     continue
                 x1, y1, x2, y2 = roi["box"]
                 roi_img = skin_only_img.crop((x1, y1, x2, y2)).convert("RGB")
+                exclude_crop = None
+                if (
+                    exclusion_mask is not None
+                    and target in SENSITIVE_TARGETS
+                    and rk not in NO_EXCLUDE_ROIS
+                ):
+                    exclude_crop = exclusion_mask[y1:y2, x1:x2]
+                    roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
 
                 # Grad-CAM on ROI crop
                 out = gradcam_overlay_base64(model, roi_img, target_label=target)
                 roi_overlay = base64png_to_pil_rgba(out["overlay_png_base64"])
+                if exclude_crop is not None:
+                    ov = np.array(roi_overlay)
+                    h = min(ov.shape[0], exclude_crop.shape[0])
+                    w = min(ov.shape[1], exclude_crop.shape[1])
+                    ov[:h, :w, 3][exclude_crop[:h, :w].astype(bool)] = 0
+                    roi_overlay = Image.fromarray(ov, mode="RGBA")
 
                 # Resize overlay to ROI size and composite onto face canvas
                 roi_w = max(1, int(x2 - x1))
@@ -660,6 +1020,8 @@ def explain(scan_id: int, target: str):
         return {
             "ok": True,
             "target": target,
+            "type": "overlay",
+            "source": "classifier",
             "overlay_png_base64": full_b64,
         }
 

@@ -47,8 +47,10 @@ class FaceParser:
             out = self.model(x)[0]
             parsing = out.argmax(1).cpu().numpy()[0]
 
-        mask = np.isin(parsing, list(SKIN_LABELS)).astype(np.uint8) * 255
-        return mask
+        # model outputs at 512x512; resize mask back to the original face size
+        mask_small = np.isin(parsing, list(SKIN_LABELS)).astype(np.uint8) * 255
+        mask_img = Image.fromarray(mask_small, mode="L").resize((w, h), Image.NEAREST)
+        return np.asarray(mask_img, dtype=np.uint8)
 
 
 def apply_skin_mask(img: Image.Image, mask: np.ndarray) -> Image.Image:

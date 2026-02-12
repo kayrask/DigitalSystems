@@ -1,0 +1,45 @@
+{
+  "tone_conf_min": 0.8,
+  "labels": [
+    "acne",
+    "bags",
+    "blackheads",
+    "hyperpigmentation",
+    "redness"
+  ],
+  "tone_classes": [
+    "Black",
+    "Brown",
+    "White"
+  ],
+  "thresholds": {
+    "default": {
+      "acne": 0.563,
+      "bags": 0.1,
+      "blackheads": 0.428,
+      "hyperpigmentation": 0.815,
+      "redness": 0.5
+    },
+    "Black": {
+      "acne": 0.059,
+      "bags": 0.1,
+      "blackheads": 0.779,
+      "hyperpigmentation": 0.293,
+      "redness": 0.5
+    },
+    "Brown": {
+      "acne": 0.56,
+      "bags": 0.39,
+      "blackheads": 0.34,
+      "hyperpigmentation": 0.81,
+      "redness": 0.34
+    },
+    "White": {
+      "acne": 0.05,
+      "bags": 0.1,
+      "blackheads": 0.65,
+      "hyperpigmentation": 0.45,
+      "redness": 0.5
+    }
+  }
+}
