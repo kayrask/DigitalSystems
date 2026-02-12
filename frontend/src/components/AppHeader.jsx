@@ -56,6 +56,11 @@ function AppHeader() {
           <NavLink to="/scan" className={linkClass}>
             Get a new scan
           </NavLink>
+          {String(user.role || "user").toLowerCase() === "admin" && (
+            <NavLink to="/admin/users" className={linkClass}>
+              Admin Accounts
+            </NavLink>
+          )}
         </nav>
       )}
 

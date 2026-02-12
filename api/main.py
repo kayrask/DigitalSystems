@@ -308,6 +308,7 @@ def init_db():
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL UNIQUE,
                 password_hash VARCHAR(64) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'user',
                 phone VARCHAR(50) NULL,
                 age INT NULL,
                 address TEXT NULL,
@@ -315,6 +316,11 @@ def init_db():
             )
             """
         )
+        # Backwards compatibility for existing DBs created before role support.
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'")
+        except Exception:
+            pass
 
         # Scans table
         cur.execute(
@@ -325,6 +331,22 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 results_json TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        # Admin annotation table (latest payload per scan)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scan_annotations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                scan_id INT NOT NULL UNIQUE,
+                user_id INT NULL,
+                image_kind VARCHAR(32) NOT NULL DEFAULT 'face_raw',
+                annotations_json LONGTEXT NOT NULL,
+                notes TEXT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
             )
             """
         )
@@ -341,6 +363,25 @@ def init_db():
 def hash_password(password: str) -> str:
     # For a uni project this is fine; in production use bcrypt/argon2
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def is_admin_user(user_id: Optional[int]) -> bool:
+    if user_id is None:
+        return False
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT role FROM users WHERE id=%s LIMIT 1", (user_id,))
+        row = cur.fetchone()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+        return bool(row and str(row[0]).lower() == "admin")
+    except Exception:
+        if conn is not None and getattr(conn, "is_connected", lambda: False)():
+            conn.close()
+        return False
 
 
 class RegisterRequest(BaseModel):
@@ -360,6 +401,18 @@ class LoginRequest(BaseModel):
 class ScanCreate(BaseModel):
     user_id: int
     results: dict
+
+class AnnotationSave(BaseModel):
+    scan_id: int
+    user_id: Optional[int] = None
+    image_kind: Optional[str] = "face_raw"
+    boxes: List[dict]
+    strokes: Optional[List[dict]] = None
+    notes: Optional[str] = None
+
+class AdminPromoteRequest(BaseModel):
+    email: str
+    code: str
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
@@ -680,8 +733,8 @@ def register(user: RegisterRequest):
         cur = conn.cursor()
 
         sql = """
-        INSERT INTO users (name, email, password_hash, address, allergies)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO users (name, email, password_hash, role, address, allergies)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
         cur.execute(
             sql,
@@ -689,6 +742,7 @@ def register(user: RegisterRequest):
                 user.name.strip(),
                 user.email.strip().lower(),
                 hash_password(user.password),
+                "user",
                 user.address,
                 user.allergies,
             ),
@@ -704,6 +758,7 @@ def register(user: RegisterRequest):
             "id": user_id,
             "name": user.name.strip(),
             "email": user.email.strip().lower(),
+            "role": "user",
         }
 
 
@@ -727,7 +782,7 @@ def login(data: LoginRequest):
         cur = conn.cursor()
 
         sql = """
-        SELECT id, name, email, password_hash
+        SELECT id, name, email, password_hash, role
         FROM users
         WHERE email = %s
         """
@@ -741,12 +796,12 @@ def login(data: LoginRequest):
         if row is None:
             raise HTTPException(status_code=400, detail="Invalid email or password")
 
-        user_id, name, email, pw_hash = row
+        user_id, name, email, pw_hash, role = row
 
         if pw_hash != hash_password(data.password):
             raise HTTPException(status_code=400, detail="Invalid email or password")
 
-        return {"id": user_id, "name": name, "email": email}
+        return {"id": user_id, "name": name, "email": email, "role": role or "user"}
 
     except Error as e:
         print("MySQL error in /login:", e)
@@ -825,6 +880,343 @@ def list_scans(user_id: int, limit: int = 10):
 
     except Error as e:
         print("MySQL error in /scans (GET):", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.get("/scans/{scan_id}")
+def get_scan(scan_id: int):
+    """Return one scan record by id."""
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, user_id, created_at, results_json
+            FROM scans
+            WHERE id=%s
+            LIMIT 1
+            """,
+            (scan_id,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Scan not found")
+
+        sid, uid, created_at, results_json = row
+        try:
+            results = json.loads(results_json or "{}")
+        except Exception:
+            results = {}
+
+        return {"id": sid, "user_id": uid, "created_at": created_at, "results": results}
+
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in /scans/{scan_id}:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.get("/admin/scan-image/{scan_id}")
+def get_admin_scan_image(scan_id: int, user_id: int, kind: str = "face_raw"):
+    """
+    Returns scan image as base64 PNG for admin annotation UI.
+    kind: face_raw | face | full
+    """
+    conn = None
+    try:
+        if not is_admin_user(user_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT results_json FROM scans WHERE id=%s", (scan_id,))
+        row = cur.fetchone()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Scan not found")
+
+        results_obj = json.loads(row[0] or "{}")
+        path_by_kind = {
+            "face_raw": results_obj.get("image_path_face_raw"),
+            "face": results_obj.get("image_path_face"),
+            "full": results_obj.get("image_path_full"),
+        }
+        image_path = path_by_kind.get(kind) or results_obj.get("image_path_face_raw") or results_obj.get("image_path_face")
+        if not image_path or not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="Scan image not found on server")
+
+        img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
+        return {
+            "ok": True,
+            "scan_id": scan_id,
+            "kind": kind,
+            "image_png_base64": pil_to_base64_png(img),
+            "size": {"w": img.size[0], "h": img.size[1]},
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Error in /admin/scan-image:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Failed to load scan image")
+
+
+@app.get("/admin/users")
+def list_admin_users(user_id: int, limit: int = 200):
+    conn = None
+    try:
+        if not is_admin_user(user_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                u.id, u.name, u.email, u.role,
+                COUNT(s.id) AS scan_count,
+                MAX(s.created_at) AS last_scan_at
+            FROM users u
+            LEFT JOIN scans s ON s.user_id = u.id
+            GROUP BY u.id, u.name, u.email, u.role
+            ORDER BY last_scan_at DESC, u.id DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        items = []
+        for r in rows:
+            items.append(
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "email": r[2],
+                    "role": r[3] or "user",
+                    "scan_count": int(r[4] or 0),
+                    "last_scan_at": r[5],
+                }
+            )
+        return {"ok": True, "items": items}
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in /admin/users:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.get("/admin/users/{target_user_id}/scans")
+def list_admin_user_scans(target_user_id: int, user_id: int, limit: int = 30):
+    conn = None
+    try:
+        if not is_admin_user(user_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT id, name, email, role
+            FROM users
+            WHERE id=%s
+            LIMIT 1
+            """,
+            (target_user_id,),
+        )
+        user_row = cur.fetchone()
+        if not user_row:
+            cur.close()
+            if conn.is_connected():
+                conn.close()
+            raise HTTPException(status_code=404, detail="Target user not found")
+
+        cur.execute(
+            """
+            SELECT id, created_at, results_json
+            FROM scans
+            WHERE user_id=%s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (target_user_id, limit),
+        )
+        rows = cur.fetchall()
+
+        scan_ids = [int(r[0]) for r in rows]
+        ann_by_scan = {}
+        if scan_ids:
+            placeholders = ",".join(["%s"] * len(scan_ids))
+            cur.execute(
+                f"""
+                SELECT scan_id, annotations_json, notes, updated_at, user_id
+                FROM scan_annotations
+                WHERE scan_id IN ({placeholders})
+                """,
+                tuple(scan_ids),
+            )
+            for a in cur.fetchall():
+                try:
+                    ann_obj = json.loads(a[1] or "{}")
+                except Exception:
+                    ann_obj = {"boxes": []}
+                ann_by_scan[int(a[0])] = {
+                    "annotations": ann_obj,
+                    "notes": a[2],
+                    "updated_at": a[3],
+                    "annotated_by_user_id": a[4],
+                }
+
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        scans = []
+        for row in rows:
+            sid, created_at, results_json = row
+            try:
+                results = json.loads(results_json or "{}")
+            except Exception:
+                results = {}
+            scans.append(
+                {
+                    "id": sid,
+                    "created_at": created_at,
+                    "results": results,
+                    "annotation": ann_by_scan.get(int(sid)),
+                }
+            )
+
+        return {
+            "ok": True,
+            "target_user": {
+                "id": user_row[0],
+                "name": user_row[1],
+                "email": user_row[2],
+                "role": user_row[3] or "user",
+            },
+            "items": scans,
+        }
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in /admin/users/{target_user_id}/scans:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.get("/admin/annotations")
+def get_admin_annotations(scan_id: int, user_id: int):
+    conn = None
+    try:
+        if not is_admin_user(user_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT scan_id, user_id, image_kind, annotations_json, notes, updated_at
+            FROM scan_annotations
+            WHERE scan_id=%s
+            LIMIT 1
+            """,
+            (scan_id,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        if not row:
+            return {"ok": True, "scan_id": scan_id, "annotation": None}
+
+        sid, uid, image_kind, annotations_json, notes, updated_at = row
+        try:
+            annotations = json.loads(annotations_json or "{}")
+        except Exception:
+            annotations = {"boxes": []}
+
+        return {
+            "ok": True,
+            "scan_id": sid,
+            "annotation": {
+                "scan_id": sid,
+                "user_id": uid,
+                "image_kind": image_kind,
+                "annotations": annotations,
+                "notes": notes,
+                "updated_at": updated_at,
+            },
+        }
+
+    except Error as e:
+        print("MySQL error in /admin/annotations (GET):", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.post("/admin/annotations")
+def save_admin_annotations(data: AnnotationSave):
+    conn = None
+    try:
+        if not is_admin_user(data.user_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+
+        annotations_json = json.dumps(
+            {
+                "boxes": data.boxes or [],
+                "strokes": data.strokes or [],
+            }
+        )
+        cur.execute(
+            """
+            INSERT INTO scan_annotations (scan_id, user_id, image_kind, annotations_json, notes)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                user_id = VALUES(user_id),
+                image_kind = VALUES(image_kind),
+                annotations_json = VALUES(annotations_json),
+                notes = VALUES(notes)
+            """,
+            (data.scan_id, data.user_id, data.image_kind or "face_raw", annotations_json, data.notes),
+        )
+
+        conn.commit()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        return {
+            "ok": True,
+            "scan_id": data.scan_id,
+            "saved_boxes": len(data.boxes or []),
+            "saved_strokes": len(data.strokes or []),
+        }
+
+    except Error as e:
+        print("MySQL error in /admin/annotations (POST):", e)
         if conn is not None and conn.is_connected():
             conn.close()
         raise HTTPException(status_code=500, detail="Database error")
@@ -1041,7 +1433,7 @@ def get_me(user_id: int):
         cur = conn.cursor()
 
         sql = """
-        SELECT id, name, email, phone, age, address, allergies
+        SELECT id, name, email, role, phone, age, address, allergies
         FROM users
         WHERE id = %s
         """
@@ -1055,11 +1447,12 @@ def get_me(user_id: int):
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        uid, name, email, phone, age, address, allergies = row
+        uid, name, email, role, phone, age, address, allergies = row
         return {
             "id": uid,
             "name": name,
             "email": email,
+            "role": role or "user",
             "phone": phone,
             "age": age,
             "address": address,
@@ -1078,7 +1471,7 @@ def update_me(user_id: int, data: ProfileUpdate):
 
         # Load existing so we can update only provided fields
         cur.execute(
-            "SELECT name, email, phone, age, address, allergies FROM users WHERE id=%s",
+            "SELECT name, email, role, phone, age, address, allergies FROM users WHERE id=%s",
             (user_id,),
         )
         row = cur.fetchone()
@@ -1091,10 +1484,11 @@ def update_me(user_id: int, data: ProfileUpdate):
         current = {
             "name": row[0],
             "email": row[1],
-            "phone": row[2],
-            "age": row[3],
-            "address": row[4],
-            "allergies": row[5],
+            "role": row[2] or "user",
+            "phone": row[3],
+            "age": row[4],
+            "address": row[5],
+            "allergies": row[6],
         }
 
         updated = {
@@ -1138,9 +1532,47 @@ def update_me(user_id: int, data: ProfileUpdate):
         if conn.is_connected():
             conn.close()
 
-        return {"ok": True, "user": {"id": user_id, **updated}}
+        return {"ok": True, "user": {"id": user_id, "role": current["role"], **updated}}
     except IntegrityError:
         raise HTTPException(status_code=400, detail="Email already in use")
     except Error as e:
         print("MySQL error in /me (PUT):", e)
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.post("/admin/bootstrap/promote")
+def promote_user_to_admin(data: AdminPromoteRequest):
+    """
+    One-time/admin-only utility for local setup.
+    Set ADMIN_PROMOTE_CODE in env and call this endpoint to promote a user by email.
+    """
+    expected = os.environ.get("ADMIN_PROMOTE_CODE")
+    if not expected:
+        raise HTTPException(status_code=500, detail="ADMIN_PROMOTE_CODE is not configured")
+    if data.code != expected:
+        raise HTTPException(status_code=403, detail="Invalid admin promotion code")
+
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET role='admin' WHERE email=%s",
+            (data.email.strip().lower(),),
+        )
+        conn.commit()
+        changed = cur.rowcount
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        if changed == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"ok": True, "email": data.email.strip().lower(), "role": "admin"}
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in /admin/bootstrap/promote:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
         raise HTTPException(status_code=500, detail="Database error")

@@ -12,6 +12,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Scan from "./pages/Scan";
 import Profile from "./pages/Profile";
+import AdminAnnotate from "./pages/AdminAnnotate";
+import AdminUsers from "./pages/AdminUsers";
+import AdminUserScans from "./pages/AdminUserScans";
 
 
 
@@ -28,7 +31,11 @@ function App() {
         <Route path="/account" element={<Account />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/history" element={<History />} /> 
+        <Route path="/admin/history" element={<History adminMode />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/users/:userId/scans" element={<AdminUserScans />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/admin/annotate/:scanId" element={<AdminAnnotate />} />
       </Routes>
     </Router>
   );
