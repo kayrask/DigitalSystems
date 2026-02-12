@@ -18,7 +18,7 @@ function safeParseUser(stored) {
   }
 }
 
-function AppHeader() {
+function AppHeader({ variant = "default" }) {
   const navigate = useNavigate();
 
   const stored = getStoredUser();
@@ -37,7 +37,7 @@ function AppHeader() {
     "nav-link" + (isActive ? " nav-link-active" : "");
 
   return (
-    <header className={"app-header" + (user ? " app-header-auth" : "")}>
+    <header className={"app-header" + (user ? " app-header-auth" : "") + (variant === "hero" ? " hero-header" : "")}>
       <div className="brand brand-left" onClick={() => navigate("/")}>
         <div className="brand-icon">🌬️</div>
         <div>
