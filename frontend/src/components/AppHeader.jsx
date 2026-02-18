@@ -18,7 +18,7 @@ function safeParseUser(stored) {
   }
 }
 
-function AppHeader() {
+function AppHeader({ variant = "default" }) {
   const navigate = useNavigate();
 
   const stored = getStoredUser();
@@ -37,7 +37,7 @@ function AppHeader() {
     "nav-link" + (isActive ? " nav-link-active" : "");
 
   return (
-    <header className={"app-header" + (user ? " app-header-auth" : "")}>
+    <header className={"app-header" + (user ? " app-header-auth" : "") + (variant === "hero" ? " hero-header" : "")}>
       <div className="brand brand-left" onClick={() => navigate("/")}>
         <div className="brand-icon">🌬️</div>
         <div>
@@ -56,6 +56,11 @@ function AppHeader() {
           <NavLink to="/scan" className={linkClass}>
             Get a new scan
           </NavLink>
+          {String(user.role || "user").toLowerCase() === "admin" && (
+            <NavLink to="/admin/users" className={linkClass}>
+              Admin Accounts
+            </NavLink>
+          )}
         </nav>
       )}
 

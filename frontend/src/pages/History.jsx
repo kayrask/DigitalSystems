@@ -55,11 +55,12 @@ const formatDrivers = (drivers = []) =>
     .filter(Boolean)
     .slice(0, 4);
 
-function History() {
+function History({ adminMode = false, userIdOverride = null, title = "Recent scans" }) {
   const navigate = useNavigate();
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
+  const [targetUser, setTargetUser] = useState(null);
 
   // Phase 4A: explainability state (shared but reset per open scan)
   const [explainTarget, setExplainTarget] = useState(null);
@@ -85,13 +86,25 @@ function History() {
       navigate("/login", { replace: true });
       return;
     }
+    if (adminMode && String(user.role || "user").toLowerCase() !== "admin") {
+      navigate("/history", { replace: true });
+      return;
+    }
 
     const fetchScans = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/scans`, {
-          params: { user_id: user.id, limit: 20 },
-        });
-        setScans(res.data.items || []);
+        if (adminMode && userIdOverride) {
+          const res = await axios.get(`${API_BASE}/admin/users/${userIdOverride}/scans`, {
+            params: { user_id: user.id, limit: 30 },
+          });
+          setTargetUser(res.data.target_user || null);
+          setScans(res.data.items || []);
+        } else {
+          const res = await axios.get(`${API_BASE}/scans`, {
+            params: { user_id: user.id, limit: 20 },
+          });
+          setScans(res.data.items || []);
+        }
       } catch (err) {
         console.error("Failed to load scans:", err);
       } finally {
@@ -100,7 +113,7 @@ function History() {
     };
 
     fetchScans();
-  }, [navigate]);
+  }, [navigate, adminMode, userIdOverride]);
 
   const toggle = (id) => {
     setOpenId((prev) => {
@@ -309,9 +322,21 @@ function History() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <h4 style={{ margin: 0 }}>Explanation overlay </h4>
-          <span style={{ fontSize: 11, opacity: 0.65 }}>
-            Highlights areas influencing the prediction
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, opacity: 0.65 }}>
+              Highlights areas influencing the prediction
+            </span>
+            {adminMode && (
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => navigate(`/admin/annotate/${scanId}`)}
+                style={{ fontSize: 12 }}
+              >
+                Annotate
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
@@ -429,7 +454,19 @@ function History() {
 
       <main className="app-main">
         <section className="card dashboard-card">
-          <h2>Recent scans</h2>
+          <h2>{title}</h2>
+          {adminMode && targetUser && (
+            <p className="hint" style={{ marginTop: -6 }}>
+              {targetUser.name || "User"} ({targetUser.email}) - role: {String(targetUser.role || "user").toUpperCase()}
+            </p>
+          )}
+          {adminMode && userIdOverride && (
+            <div style={{ marginBottom: 10 }}>
+              <button className="ghost-btn" onClick={() => navigate("/admin/users")}>
+                Back to users
+              </button>
+            </div>
+          )}
 
           {loading && <p className="hint">Loading your scan history…</p>}
 
@@ -529,8 +566,8 @@ function History() {
                           {/* Phase 3: Risk/Benefit */}
                           <RiskBenefitWidget outcome={outcome} risk={risk} />
 
-                          {/* Routine / formulas */}
-                          {routine && (
+                          {/* Routine / formulas (admin only) */}
+                          {adminMode && routine && (
                             <>
                               <h4 style={{ marginTop: 12 }}>Generated routine & formulas</h4>
                               <p style={{ marginTop: -6, fontSize: 12, opacity: 0.65 }}>
@@ -585,7 +622,35 @@ function History() {
                             </>
                           )}
 
-                          {!routine && !outcome && !risk && (
+                          {adminMode && scan.annotation && (
+                            <div
+                              style={{
+                                marginTop: 12,
+                                background: "white",
+                                padding: 12,
+                                borderRadius: 10,
+                              }}
+                            >
+                              <h4 style={{ marginTop: 0, marginBottom: 8 }}>Saved annotations</h4>
+                              <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>
+                                Boxes: {Array.isArray(scan.annotation.annotations?.boxes) ? scan.annotation.annotations.boxes.length : 0}
+                                {scan.annotation.updated_at ? ` | Updated: ${new Date(scan.annotation.updated_at).toLocaleString()}` : ""}
+                              </div>
+                              {scan.annotation.notes && (
+                                <p style={{ margin: 0, fontSize: 13 }}>
+                                  <b>Notes:</b> {scan.annotation.notes}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {!adminMode && !outcome && !risk && (
+                            <p className="hint" style={{ marginTop: 0 }}>
+                              No additional data stored for this scan (older entry).
+                            </p>
+                          )}
+
+                          {adminMode && !routine && !outcome && !risk && (
                             <p className="hint" style={{ marginTop: 0 }}>
                               No routine/risk data stored for this scan (older entry).
                             </p>

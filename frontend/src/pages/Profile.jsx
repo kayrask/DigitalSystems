@@ -141,6 +141,7 @@ function Profile() {
         ...user,
         name: updated.name,
         email: updated.email,
+        role: updated.role || user.role || "user",
       });
 
       setSuccess("Saved!");

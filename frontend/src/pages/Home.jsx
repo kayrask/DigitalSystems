@@ -19,18 +19,17 @@ function Home() {
   const ctaLink = user ? "/scan" : "/login";
 
   return (
-    <div className="app-root">
-      <AppHeader />
+    <div className="app-root home-theme">
+      <AppHeader variant="hero" />
 
       <main className="home-main">
-        {/* (rest of your Home JSX stays exactly as you pasted before) */}
-        <section className="card home-hero-card">
-          <div className="home-hero-left">
-            <h2>Understand your skin, one scan at a time.</h2>
+        <section className="home-hero-shell">
+          <div className="home-hero-left editorial">
+            <h2>AI Skin Analysis Companion</h2>
             <p className="home-hero-text">
-              AURAI estimates acne, redness, blackheads and more from your facial
-              photo using a deep learning model. It&apos;s designed to help you
-              track trends in your skin rather than give a diagnosis.
+              A professional skin insights app built from your own AI pipeline.
+              Scan, track trends, review localized findings, and personalize care
+              with safer recommendations.
             </p>
 
             <div className="home-hero-actions">
@@ -39,35 +38,45 @@ function Home() {
               </Link>
             </div>
 
-            
+            <div className="home-stats-row">
+              <div className="home-stat">
+                <b>30+</b>
+                <span>Regression cases</span>
+              </div>
+              <div className="home-stat">
+                <b>5</b>
+                <span>Core conditions</span>
+              </div>
+              <div className="home-stat">
+                <b>ROI+YOLO</b>
+                <span>Hybrid explainability</span>
+              </div>
+            </div>
           </div>
 
-          <div className="home-hero-right">
-            <div className="home-phone">
-              <div className="home-phone-header">Example scan</div>
+          <div className="home-hero-right phone-wrap">
+            <div className="home-phone premium">
+              <div className="home-phone-header">AURAI Live View</div>
               <div className="home-phone-screen">
-                <div className="home-face-placeholder">Your face here</div>
+                <div className="home-face-placeholder">Face scan preview</div>
                 <div className="home-mini-results">
                   <div className="home-mini-row">
                     <span>Acne</span>
-                    <span>82%</span>
+                    <span>29.8%</span>
                   </div>
                   <div className="home-mini-row">
-                    <span>Redness</span>
-                    <span>19%</span>
+                    <span>Hyperpigmentation</span>
+                    <span>2.0%</span>
                   </div>
                   <div className="home-mini-row">
                     <span>Blackheads</span>
-                    <span>37%</span>
+                    <span>1.8%</span>
                   </div>
                 </div>
               </div>
-              <div className="home-phone-footer">
-                <span className="home-dot active" />
-                <span className="home-dot" />
-                <span className="home-dot" />
-              </div>
             </div>
+            <div className="leaf leaf-a" />
+            <div className="leaf leaf-b" />
           </div>
         </section>
 
