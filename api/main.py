@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from api.inference import SkinModel, SkinTypeModel, SkinToneModel, LABELS
-from PIL import Image, ImageOps, ImageDraw
+from PIL import Image, ImageOps, ImageDraw, ImageFilter
 from pydantic import BaseModel
 from api.recommender import recommend_routine
 from typing import Optional, List
@@ -446,6 +446,216 @@ def pil_to_base64_png(img: Image.Image) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _get_concern_prob(results_obj: dict, label: str) -> float:
+    """
+    Extract concern probability from either:
+    - new format: {"results": {"acne": {"probability": ...}}}
+    - old format: {"acne": {"probability": ...}}
+    """
+    try:
+        if isinstance(results_obj.get("results"), dict):
+            v = results_obj["results"].get(label, {})
+            if isinstance(v, dict) and "probability" in v:
+                return float(v.get("probability") or 0.0)
+        v2 = results_obj.get(label, {})
+        if isinstance(v2, dict) and "probability" in v2:
+            return float(v2.get("probability") or 0.0)
+    except Exception:
+        pass
+    return 0.0
+
+
+def _smoothstep(x: np.ndarray, edge0: float, edge1: float) -> np.ndarray:
+    if edge1 <= edge0:
+        return np.zeros_like(x)
+    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def simulate_expected_outcome(
+    face_img: Image.Image,
+    concerns: dict,
+    yolo_boxes: Optional[list] = None,
+    strength: float = 0.85,
+) -> tuple[Image.Image, dict]:
+    """
+    Create a conservative cosmetic "expected outcome" simulation from predictions.
+    This is a visual projection only (non-diagnostic).
+    """
+    strength = float(np.clip(strength, 0.0, 1.0))
+    img = face_img.convert("RGB")
+    arr = np.asarray(img).astype(np.float32) / 255.0
+    h, w = arr.shape[:2]
+    if h < 4 or w < 4:
+        return img, {"applied": False, "reason": "image_too_small"}
+
+    # Lightweight skin-like mask from HSV + luma constraints.
+    mx = arr.max(axis=2)
+    mn = arr.min(axis=2)
+    sat = (mx - mn) / np.maximum(mx, 1e-6)
+    lum = arr.mean(axis=2)
+    skin_mask = ((sat > 0.08) & (sat < 0.68) & (lum > 0.08) & (lum < 0.96)).astype(np.float32)
+    skin_mask = np.clip(
+        np.asarray(
+            Image.fromarray((skin_mask * 255).astype(np.uint8))
+            .filter(ImageFilter.GaussianBlur(radius=6))
+        ).astype(np.float32)
+        / 255.0,
+        0.0,
+        1.0,
+    )
+
+    acne_p_raw = float(np.clip(concerns.get("acne", 0.0), 0.0, 1.0))
+    red_p_raw = float(np.clip(concerns.get("redness", 0.0), 0.0, 1.0))
+    pig_p_raw = float(np.clip(concerns.get("hyperpigmentation", 0.0), 0.0, 1.0))
+    black_p_raw = float(np.clip(concerns.get("blackheads", 0.0), 0.0, 1.0))
+    bags_p_raw = float(np.clip(concerns.get("bags", 0.0), 0.0, 1.0))
+
+    # Non-linear boost so medium/low probabilities still produce visible (but bounded) preview changes.
+    acne_p = float(np.sqrt(acne_p_raw))
+    red_p = float(np.sqrt(red_p_raw))
+    pig_p = float(np.sqrt(pig_p_raw))
+    black_p = float(np.sqrt(black_p_raw))
+    bags_p = float(np.sqrt(bags_p_raw))
+
+    out = arr.copy()
+
+    # Build localized acne/texture mask from YOLO boxes (or high-frequency fallback).
+    acne_mask = np.zeros((h, w), dtype=np.float32)
+    if isinstance(yolo_boxes, list):
+        for b in yolo_boxes:
+            cls = int(b.get("cls", -1))
+            # Acne / blackheads / pores / whiteheads
+            if cls not in {0, 1, 4, 8}:
+                continue
+            conf = float(b.get("conf", 0.0))
+            if conf < 0.08:
+                continue
+            x1, y1, x2, y2 = [int(round(v)) for v in (b.get("box") or [0, 0, 0, 0])]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x2 <= x1 or y2 <= y1:
+                continue
+            acne_mask[y1:y2, x1:x2] = np.maximum(acne_mask[y1:y2, x1:x2], min(1.0, 0.35 + conf))
+    if acne_mask.max() > 0:
+        acne_mask = np.asarray(
+            Image.fromarray((acne_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=7))
+        ).astype(np.float32) / 255.0
+    else:
+        # Fallback: estimate blemish-like high-frequency texture on skin only.
+        blur_luma = np.asarray(
+            Image.fromarray((lum * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.3))
+        ).astype(np.float32) / 255.0
+        highfreq = np.abs(lum - blur_luma)
+        acne_mask = _smoothstep(highfreq, 0.02, 0.10) * skin_mask
+        acne_mask = np.asarray(
+            Image.fromarray((acne_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=4))
+        ).astype(np.float32) / 255.0
+
+    # 1) Acne/texture improvement: targeted smoothing + tone evening only in acne mask.
+    texture_level = np.clip((0.62 * acne_p + 0.45 * black_p) * strength, 0.0, 0.40)
+    if (acne_p_raw > 0.08 or black_p_raw > 0.08) and texture_level < 0.08 * strength:
+        texture_level = 0.08 * strength
+    if texture_level > 1e-4:
+        blur_rgb = np.asarray(
+            Image.fromarray((arr * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.15))
+        ).astype(np.float32) / 255.0
+        texture_mask = np.clip(acne_mask * skin_mask, 0.0, 1.0)
+        # Keep detail by using low blend and no global skin blur.
+        smooth_w = (0.55 * texture_level) * texture_mask[..., None]
+        out = out * (1.0 - smooth_w) + blur_rgb * smooth_w
+        # Slightly even local contrast without washing out.
+        local_luma = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
+        out = out * (1.0 - 0.16 * texture_level * texture_mask[..., None]) + (
+            local_luma[..., None] * (0.16 * texture_level * texture_mask[..., None])
+        )
+
+    # 2) Redness correction: reduce local saturation/red dominance without hue-casting.
+    red_level = np.clip(red_p * strength * 0.46, 0.0, 0.34)
+    if red_p_raw > 0.08 and red_level < 0.06 * strength:
+        red_level = 0.06 * strength
+    if red_level > 1e-4:
+        r = out[..., 0]
+        g = out[..., 1]
+        b = out[..., 2]
+        excess_red = np.clip(r - (0.52 * g + 0.48 * b), 0.0, 1.0)
+        red_mask = _smoothstep(excess_red, 0.02, 0.22) * skin_mask
+        # Pull toward local luminance to avoid green/purple color shift.
+        local_luma = 0.299 * r + 0.587 * g + 0.114 * b
+        sat_reduce = (0.62 * red_level) * red_mask
+        out = out * (1.0 - sat_reduce[..., None]) + local_luma[..., None] * sat_reduce[..., None]
+        # Slight brightness lift for "post-treatment" look.
+        out = np.clip(out + (0.08 * red_level * red_mask[..., None]), 0.0, 1.0)
+
+    # 3) Hyperpigmentation correction: lift darker areas while preserving chroma.
+    pig_level = np.clip(pig_p * strength * 0.50, 0.0, 0.32)
+    if pig_p_raw > 0.08 and pig_level < 0.06 * strength:
+        pig_level = 0.06 * strength
+    if pig_level > 1e-4:
+        y = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
+        dark_mask = _smoothstep(0.74 - y, 0.04, 0.33) * skin_mask
+        dark_mask = np.asarray(
+            Image.fromarray((dark_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=5))
+        ).astype(np.float32) / 255.0
+        # Lighten toward white in a bounded way to keep skin tone realistic.
+        lift = (pig_level * 0.55) * dark_mask[..., None]
+        out = np.clip(out + lift * (1.0 - out), 0.0, 1.0)
+
+    # 4) Under-eye softening based on ROI boxes when available (luma-only style).
+    bags_level = np.clip(bags_p * strength * 0.32, 0.0, 0.22)
+    if bags_p_raw > 0.08 and bags_level < 0.05 * strength:
+        bags_level = 0.05 * strength
+    if bags_level > 1e-4:
+        try:
+            rois = extract_rois_with_boxes(img)
+        except Exception:
+            rois = {}
+        eye_mask = np.zeros((h, w), dtype=np.float32)
+        for k in ("under_eye_left", "under_eye_right", "under_eye"):
+            roi = rois.get(k)
+            if not roi:
+                continue
+            x1, y1, x2, y2 = [int(v) for v in roi["box"]]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x2 > x1 and y2 > y1:
+                eye_mask[y1:y2, x1:x2] = 1.0
+        if eye_mask.max() > 0:
+            eye_mask = np.asarray(
+                Image.fromarray((eye_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=10))
+            ).astype(np.float32) / 255.0
+            # Gentle luma lift, avoid blur-heavy "beauty filter" look.
+            local_luma = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
+            w = (0.35 * bags_level) * eye_mask[..., None]
+            out = out * (1.0 - w) + local_luma[..., None] * w
+            out = np.clip(out + (0.08 * bags_level * eye_mask[..., None]), 0.0, 1.0)
+
+    # Ensure a minimum visible difference for practical UX if concerns are present.
+    mean_delta = float(np.mean(np.abs(out - arr)))
+    concern_max = float(max(acne_p_raw, red_p_raw, pig_p_raw, black_p_raw, bags_p_raw))
+    if concern_max >= 0.12 and mean_delta < 0.012:
+        # No additional blur fallback: use tiny skin-only tonal lift to keep realism.
+        out = np.clip(out + (0.010 * strength * skin_mask[..., None]), 0.0, 1.0)
+        mean_delta = float(np.mean(np.abs(out - arr)))
+
+    # Final detail-preserving sharpen so preview stays crisp, not "filtered".
+    sim = Image.fromarray((np.clip(out, 0.0, 1.0) * 255).astype(np.uint8)).filter(
+        ImageFilter.UnsharpMask(radius=1.0, percent=80, threshold=3)
+    )
+    meta = {
+        "applied": True,
+        "strength": strength,
+        "levels": {
+            "texture": float(texture_level),
+            "redness": float(red_level),
+            "hyperpigmentation": float(pig_level),
+            "bags": float(bags_level),
+        },
+        "mean_delta": mean_delta,
+    }
+    return sim, meta
 
 
 @app.on_event("startup")
@@ -926,6 +1136,93 @@ def get_scan(scan_id: int):
         raise HTTPException(status_code=500, detail="Database error")
 
 
+@app.get("/simulate_outcome")
+def simulate_outcome(scan_id: int, user_id: int, strength: float = 0.9):
+    """
+    Returns a visual 'expected outcome' projection for a saved scan.
+    This is a cosmetic simulation, not a medical prediction.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, user_id, results_json
+            FROM scans
+            WHERE id=%s
+            LIMIT 1
+            """,
+            (scan_id,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Scan not found")
+
+        sid, owner_id, results_json = row
+        if int(owner_id) != int(user_id):
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        try:
+            results_obj = json.loads(results_json or "{}")
+        except Exception:
+            results_obj = {}
+
+        face_path = (
+            results_obj.get("image_path_face_raw")
+            or results_obj.get("image_path_face")
+        )
+        if not face_path or not os.path.exists(face_path):
+            raise HTTPException(status_code=404, detail="Face image not found for this scan")
+
+        face_img = ImageOps.exif_transpose(Image.open(face_path)).convert("RGB")
+        concerns = {
+            "acne": _get_concern_prob(results_obj, "acne"),
+            "blackheads": _get_concern_prob(results_obj, "blackheads"),
+            "redness": _get_concern_prob(results_obj, "redness"),
+            "bags": _get_concern_prob(results_obj, "bags"),
+            "hyperpigmentation": _get_concern_prob(results_obj, "hyperpigmentation"),
+        }
+
+        yolo_boxes = []
+        try:
+            yolo_boxes = (((results_obj or {}).get("yolo") or {}).get("boxes")) or []
+        except Exception:
+            yolo_boxes = []
+
+        sim_img, sim_meta = simulate_expected_outcome(
+            face_img=face_img,
+            concerns=concerns,
+            yolo_boxes=yolo_boxes,
+            strength=strength,
+        )
+
+        return {
+            "ok": True,
+            "scan_id": sid,
+            "type": "outcome_simulation",
+            "disclaimer": "Visual simulation only. Not a diagnosis or guaranteed medical outcome.",
+            "current_png_base64": pil_to_base64_png(face_img),
+            "expected_png_base64": pil_to_base64_png(sim_img),
+            "concerns": concerns,
+            "meta": sim_meta,
+        }
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in /simulate_outcome:", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+    except Exception as e:
+        print("Error in /simulate_outcome:", e)
+        raise HTTPException(status_code=500, detail="Failed to generate outcome simulation")
+
+
 @app.get("/admin/scan-image/{scan_id}")
 def get_admin_scan_image(scan_id: int, user_id: int, kind: str = "face_raw"):
     """
@@ -1243,30 +1540,23 @@ def explain(scan_id: int, target: str):
         results_obj = json.loads(row[0] or "{}")
 
         full_path = results_obj.get("image_path_full")
-        face_path = results_obj.get("image_path_face")
-        face_raw_path = results_obj.get("image_path_face_raw")
         bbox = results_obj.get("face_bbox")
         print("EXPLAIN full_path:", full_path, "exists:", os.path.exists(full_path) if full_path else None)
-        print("EXPLAIN face_path:", face_path, "exists:", os.path.exists(face_path) if face_path else None)
+        print("EXPLAIN face_raw_path:", results_obj.get("image_path_face_raw"), "exists:", os.path.exists(results_obj.get("image_path_face_raw")) if results_obj.get("image_path_face_raw") else None)
         print("EXPLAIN bbox:", bbox)
         print("CWD:", os.getcwd())
         
 
         if not full_path or not os.path.exists(full_path):
             raise HTTPException(status_code=404, detail="Full scan image not found on server")
-        # Prefer raw face crop for ROI extraction (avoid oval mask artifacts)
-        if face_raw_path and os.path.exists(face_raw_path):
-            face_path_to_use = face_raw_path
-        else:
-            face_path_to_use = face_path
-
-        if not face_path_to_use or not os.path.exists(face_path_to_use):
-            raise HTTPException(status_code=404, detail="Face scan image not found on server")
         if not bbox:
             raise HTTPException(status_code=404, detail="Face bbox missing for this scan")
 
         full_img = ImageOps.exif_transpose(Image.open(full_path)).convert("RGB")
-        face_img = ImageOps.exif_transpose(Image.open(face_path_to_use)).convert("RGB")
+        bx, by = int(bbox["x"]), int(bbox["y"])
+        bw, bh = int(bbox["w"]), int(bbox["h"])
+        # Always derive face crop from the full image + bbox to avoid oval-masked artifacts.
+        face_img = full_img.crop((bx, by, bx + bw, by + bh)).convert("RGB")
 
         # If we have YOLO, use boxes for localized issues instead of Grad-CAM
         LOCALIZED = {"acne", "blackheads", "bags"}
@@ -1291,9 +1581,6 @@ def explain(scan_id: int, target: str):
             )
             
             # Scale face image to fit within full image and overlay at face bbox location
-            bx, by = int(bbox["x"]), int(bbox["y"])
-            bw, bh = int(bbox["w"]), int(bbox["h"])
-            
             full_img_copy = full_img.copy()
             face_with_boxes_scaled = face_with_boxes.resize((bw, bh), Image.Resampling.LANCZOS)
             full_img_copy.paste(face_with_boxes_scaled, (bx, by))
@@ -1396,9 +1683,6 @@ def explain(scan_id: int, target: str):
             face_overlay_canvas = Image.fromarray(overlay_arr, mode="RGBA")
 
         # 2) Paste the face overlay canvas back onto the FULL image using the stored face bbox
-        bx, by = int(bbox["x"]), int(bbox["y"])
-        bw, bh = int(bbox["w"]), int(bbox["h"])
-
         full_rgba = full_img.convert("RGBA")
         face_overlay_resized = face_overlay_canvas.resize((bw, bh)).convert("RGBA")
 
