@@ -15,16 +15,19 @@ from api.face_parse import FaceParser, apply_skin_mask
 from api.yolo_detector import YoloSkinDetector
 from datetime import datetime
 
-
 import numpy as np
 import os
 import io
-import hashlib
 import json
 import base64
 
+import bcrypt
+from dotenv import load_dotenv
 import mysql.connector
 from mysql.connector import Error, IntegrityError
+
+# Load .env from project root (one level up from api/)
+load_dotenv()
 
 app = FastAPI()
 
@@ -196,6 +199,8 @@ def _retake_guidance_from_quality(quality: dict) -> list[str]:
             tips.append("Move closer; keep your full face large and centered.")
         elif r.startswith("face_off_center"):
             tips.append("Center your face in the guide oval before scanning.")
+        elif r.startswith("uneven_lighting"):
+            tips.append("Move to even, front-facing light. Avoid side windows or lamps.")
 
     # dedupe while preserving order
     seen = set()
@@ -272,12 +277,12 @@ def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> 
         }
     return gated, uncertainty
 
-# === MySQL CONFIG ===
-MYSQL_HOST = "localhost"
-MYSQL_PORT = 3306
-MYSQL_USER = "root"              # <-- change if needed
-MYSQL_PASSWORD = "kayra0505"     # <-- put your MySQL password here
-MYSQL_DB = "aurai"               # the DB you created in Workbench
+# === MySQL CONFIG — loaded from .env ===
+MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+MYSQL_DB = os.getenv("MYSQL_DB", "aurai")
 
 
 
@@ -361,8 +366,19 @@ def init_db():
 
 
 def hash_password(password: str) -> str:
-    # For a uni project this is fine; in production use bcrypt/argon2
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against bcrypt hash. Falls back to SHA-256 for legacy accounts."""
+    try:
+        if stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$"):
+            return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+    except Exception:
+        pass
+    # Legacy SHA-256 fallback for accounts created before bcrypt migration
+    import hashlib
+    return hashlib.sha256(password.encode("utf-8")).hexdigest() == stored_hash
 
 
 def is_admin_user(user_id: Optional[int]) -> bool:
@@ -661,6 +677,16 @@ def simulate_expected_outcome(
 @app.on_event("startup")
 def on_startup():
     init_db()
+    # Warm up all models so first real request isn't slow (cold JIT / memory allocation)
+    try:
+        import numpy as np
+        dummy = Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
+        model.predict(dummy)
+        skin_type_model.predict(dummy)
+        skin_tone_model.predict(dummy)
+        print("[startup] Model warm-up complete.")
+    except Exception as e:
+        print(f"[startup] Model warm-up failed (non-fatal): {e}")
 
 
 # Allow all origins for now (you can restrict later)
@@ -718,6 +744,12 @@ async def predict(
     user_id: int | None = Form(None),
 ):
     contents = await file.read()
+
+    # Reject oversized uploads before any processing
+    MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large. Maximum size is 15 MB.")
+
     full_path = save_upload_image(contents, suffix="_full")  # save original bytes
     try:
         image_full = ImageOps.exif_transpose(Image.open(io.BytesIO(contents))).convert("RGB")
@@ -764,9 +796,18 @@ async def predict(
     
 
 
-    # === Phase 1 Quality Gate should run on the face crop ===
-    quality = assess_image_quality(face_img, QualityConfig(min_short_side=240))
+    # === Phase 1 Quality Gate — must run on RAW face crop, not the oval-masked image ===
+    # Masking artificially reduces contrast/blur variance and gives wrong readings.
+    quality = assess_image_quality(face_img_raw, QualityConfig(min_short_side=240))
     quality = _add_face_pose_quality_checks(quality, face_meta, image_full)
+
+    # Shadow gate: uneven left/right illumination degrades prediction quality
+    shadow_score = compute_shadow_score(face_img_raw)
+    quality["metrics"]["shadow_score"] = shadow_score
+    quality["thresholds"]["shadow_max"] = 0.35
+    if shadow_score > 0.35:
+        quality["reasons"].append(f"uneven_lighting (shadow_score={shadow_score:.2f})")
+        quality["passed"] = len(quality["reasons"]) == 0
     retake_guidance = _retake_guidance_from_quality(quality)
     if not quality["passed"]:
         return {
@@ -793,8 +834,8 @@ async def predict(
         print("ROI extraction failed:", e)
         rois = {}
     exclusion_mask = rois.get("exclude_mouth_moustache_mask")
-    # Base full-face prediction
-    results_full = model.predict(
+    # Base full-face prediction — TTA averages original + h-flip for stability
+    results_full = model.predict_tta(
         skin_only_img,
         tone_group=tone_out.get("group"),
         tone_conf=tone_out.get("confidence"),
@@ -833,7 +874,7 @@ async def predict(
                 exclude_crop = exclusion_mask[y1:y2, x1:x2]
                 roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
 
-            roi_pred = model.predict(
+            roi_pred = model.predict_tta(
                 roi_img,
                 tone_group=tone_out["group"],
                 tone_conf=tone_out["confidence"],
@@ -852,10 +893,11 @@ async def predict(
         }
 
     # --- YOLO detection on face crop (for sanity + localization) ---
+    # conf=0.20: 0.10 was too noisy, producing false detections at 10% confidence
     try:
         yolo_boxes = yolo_detector.predict(
             face_img_raw,
-            conf=0.10,
+            conf=0.20,
             iou=0.45,
             imgsz=512,
             max_det=100,
@@ -864,17 +906,18 @@ async def predict(
         print("YOLO predict failed:", e)
         yolo_boxes = []
 
-    # Count detections by your labels
+    # Count detections by label
     det_count = {k: 0 for k in results.keys()}
     for b in yolo_boxes:
         for lbl, ids in YOLO_CLASS_IDS.items():
-            if lbl in det_count and b["cls"] in ids and b["conf"] >= 0.10:
+            if lbl in det_count and b["cls"] in ids and b["conf"] >= 0.20:
                 det_count[lbl] += 1
 
-    # Fusion: suppress acne/blackheads/bags when YOLO finds nothing
+    # Fusion: when YOLO finds nothing, reduce (not zero) the CNN probability.
+    # Factor 0.50 (was 0.35) — less aggressive suppression to avoid missing real cases.
     for lbl in ["acne", "blackheads", "bags"]:
         if lbl in results and det_count.get(lbl, 0) == 0:
-            results[lbl]["probability"] = float(results[lbl]["probability"] * 0.35)
+            results[lbl]["probability"] = float(results[lbl]["probability"] * 0.50)
             thr = float(thr_map.get(lbl, 0.5))
             results[lbl]["prediction"] = int(results[lbl]["probability"] >= thr)
 
@@ -1008,7 +1051,7 @@ def login(data: LoginRequest):
 
         user_id, name, email, pw_hash, role = row
 
-        if pw_hash != hash_password(data.password):
+        if not verify_password(data.password, pw_hash):
             raise HTTPException(status_code=400, detail="Invalid email or password")
 
         return {"id": user_id, "name": name, "email": email, "role": role or "user"}
@@ -1563,7 +1606,7 @@ def explain(scan_id: int, target: str):
         if target in LOCALIZED:
             yolo_boxes = yolo_detector.predict(
                 face_img,
-                conf=0.10,
+                conf=0.20,
                 iou=0.45,
                 imgsz=512,
                 max_det=100,
