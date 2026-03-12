@@ -8,4 +8,6 @@ mysql-connector-python
 openpyxl
 mediapipe
 opencv-python
-
+bcrypt
+python-dotenv
+ultralytics
