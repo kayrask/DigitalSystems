@@ -64,53 +64,68 @@ function Login() {
       </header>
 
       <main className="app-main auth-main">
-        <section className="card auth-card">
-          <h2>Log in</h2>
-          <p className="hint">Log in with the account you registered.</p>
-
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label className="input-label">
-              Email
-              <input
-                type="email"
-                className="input-field"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-
-            <label className="input-label">
-              Password
-              <input
-                type="password"
-                className="input-field"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
-              Remember me
-            </label>
-
-
-            <div className="auth-actions">
-              <button type="submit" className="primary-btn">
-                Log in
-              </button>
-              <Link to="/register" className="secondary-link">
-                Don&apos;t have an account? Register
-              </Link>     
+        <section className="card auth-card auth-shell">
+          <aside className="auth-aside">
+            <p className="auth-aside-kicker">Welcome back</p>
+            <h2>Sign in to continue your skin journey</h2>
+            <p className="auth-aside-copy">
+              Access your scan history, monitor trends, and continue with a new analysis.
+            </p>
+            <div className="auth-aside-points">
+              <span>Fast face scan workflow</span>
+              <span>Structured concern tracking</span>
+              <span>Private account-level history</span>
             </div>
+          </aside>
 
-            {errorMsg && <p className="error-msg">{errorMsg}</p>}
-          </form>
+          <div className="auth-panel">
+            <h3>Log in</h3>
+            <p className="hint">Use the account you registered previously.</p>
+
+            <form className="auth-form" onSubmit={handleSubmit}>
+              <label className="input-label">
+                Email
+                <input
+                  type="email"
+                  className="input-field"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+
+              <label className="input-label">
+                Password
+                <input
+                  type="password"
+                  className="input-field"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+
+              <label className="auth-remember">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember me on this device</span>
+              </label>
+
+              <div className="auth-actions">
+                <button type="submit" className="primary-btn">
+                  Log in
+                </button>
+                <Link to="/register" className="secondary-link">
+                  Don&apos;t have an account? Register
+                </Link>
+              </div>
+
+              {errorMsg && <p className="error-msg">{errorMsg}</p>}
+            </form>
+          </div>
         </section>
       </main>
 

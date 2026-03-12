@@ -201,10 +201,13 @@ function Scan() {
     <div className="app-root">
       <AppHeader />
 
-      <main className="app-main">
+      <main className="app-main scan-main">
         {/* LEFT: input controls */}
-        <section className="card">
-          <h2>1. Choose input method</h2>
+        <section className="card scan-card scan-card-input">
+          <div className="scan-card-head">
+            <span className="scan-step-pill">Step 1</span>
+            <h2>Choose input method</h2>
+          </div>
 
           <div className="mode-toggle">
             <button
@@ -216,7 +219,7 @@ function Scan() {
                 resetOutputs();
               }}
             >
-              📁 Upload photo
+              Upload photo
             </button>
 
             <button
@@ -228,14 +231,14 @@ function Scan() {
                 resetOutputs();
               }}
             >
-              📷 Live camera
+              Live camera
             </button>
           </div>
 
           {mode === "upload" && (
             <div className="upload-area">
               <label className="upload-label">
-                <span className="upload-icon">⬆️</span>
+                <span className="upload-icon">↑</span>
                 <span>Drop an image here or click to browse</span>
                 <input
                   type="file"
@@ -278,7 +281,7 @@ function Scan() {
               </div>
 
               <button className="primary-btn" onClick={captureFromWebcam}>
-                📸 Capture snapshot
+                Capture snapshot
               </button>
               <p className="hint">
                 Keep your face centered, eyes open, even lighting.
@@ -288,11 +291,16 @@ function Scan() {
         </section>
 
         {/* MIDDLE: preview */}
-        <section className="card">
-          <h2>2. Preview</h2>
+        <section className="card scan-card scan-card-preview">
+          <div className="scan-card-head">
+            <span className="scan-step-pill">Step 2</span>
+            <h2>Preview</h2>
+          </div>
 
           {previewUrl ? (
-            <img src={previewUrl} alt="preview" className="image-preview" />
+            <div className="scan-preview-frame">
+              <img src={previewUrl} alt="preview" className="image-preview" />
+            </div>
           ) : (
             <div className="empty-preview">No image selected yet.</div>
           )}
@@ -302,33 +310,28 @@ function Scan() {
             onClick={handleAnalyze}
             disabled={loading || !previewUrl}
           >
-            {loading ? "Analyzing..." : "🔍 Analyze skin"}
+            {loading ? "Analyzing..." : "Analyze skin"}
           </button>
 
           {error && <p className="error-msg">{error}</p>}
         </section>
 
         {/* RIGHT: results */}
-        <section className="card">
-          <h2>3. Results</h2>
+        <section className="card scan-card scan-card-results">
+          <div className="scan-card-head">
+            <span className="scan-step-pill">Step 3</span>
+            <h2>Results</h2>
+          </div>
 
           {skinType && (
-            <div
-              className="skin-type-card"
-              style={{
-                marginBottom: 12,
-                padding: 10,
-                borderRadius: 10,
-                background: "#f7f7f7",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontWeight: 800 }}>Skin type</span>
-                <span style={{ fontWeight: 900 }}>
+            <div className="skin-type-card">
+              <div className="skin-type-row">
+                <span className="skin-type-label">Skin type</span>
+                <span className="skin-type-value">
                   {String(skinType.skin_type || "").toUpperCase()}
                 </span>
               </div>
-              <div style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
+              <div className="skin-type-confidence">
                 Confidence: {((skinType.confidence || 0) * 100).toFixed(1)}%
               </div>
             </div>
@@ -337,14 +340,7 @@ function Scan() {
           {!results && <p className="hint">Your AI analysis will appear here.</p>}
 
           {results && (
-            <div
-              style={{
-                maxHeight: 520,
-                overflowY: "auto",
-                paddingRight: 6,
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
+            <div className="scan-results-wrap">
               <div className="results-grid">
                 {Object.entries(results).map(([key, value]) => {
                   const prob = value?.probability || 0;

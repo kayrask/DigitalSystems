@@ -88,108 +88,121 @@ function Register() {
       </header>
 
       <main className="app-main auth-main">
-        <section className="card auth-card">
-          <h2>Create an account</h2>
-          <p className="hint">This uses a real SQL database on the backend.</p>
+        <section className="card auth-card auth-shell">
+          <aside className="auth-aside">
+            <p className="auth-aside-kicker">Create your account</p>
+            <h2>Set up your personal AURAI space</h2>
+            <p className="auth-aside-copy">
+              Your profile stores scan history and preferences to provide consistent, trackable results.
+            </p>
+            <div className="auth-aside-points">
+              <span>Secure account-based history</span>
+              <span>Faster repeat scan flow</span>
+              <span>Personalized routine context</span>
+            </div>
+          </aside>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label className="input-label">
-              Name *
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
+          <div className="auth-panel">
+            <h3>Create an account</h3>
+            <p className="hint">Registration takes less than a minute.</p>
 
-            <label className="input-label">
-              Email *
-              <input
-                type="email"
-                className="input-field"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </label>
+            <form className="auth-form" onSubmit={handleSubmit}>
+              <label className="input-label">
+                Name *
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </label>
 
-            <label className="input-label">
-              Password *
-              <input
-                type="password"
-                className="input-field"
-                placeholder="Choose a password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </label>
+              <label className="input-label">
+                Email *
+                <input
+                  type="email"
+                  className="input-field"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </label>
 
-            {/* Optional Address */}
-            <label className="input-label">
-              Address (optional)
-              <textarea
-                className="input-field"
-                placeholder="Street, city, postcode (optional)"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                rows={3}
-                style={{ resize: "vertical" }}
-              />
-            </label>
+              <label className="input-label">
+                Password *
+                <input
+                  type="password"
+                  className="input-field"
+                  placeholder="Choose a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </label>
 
-            {/* Allergies Yes/No */}
-            <div className="input-label" style={{ marginTop: 8 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                Do you have any allergies?
-              </div>
-
-              <div className="auth-toggle-row">
-                <button
-                  type="button"
-                  className={hasAllergies === "yes" ? "mode-btn active" : "mode-btn"}
-                  onClick={() => selectAllergies("yes")}
-                >
-                  Yes
-                </button>
-
-                <button
-                  type="button"
-                  className={hasAllergies === "no" ? "mode-btn active" : "mode-btn"}
-                  onClick={() => selectAllergies("no")}
-                >
-                  No
-                </button>
-              </div>
-
-              {hasAllergies === "yes" && (
+              <label className="input-label">
+                Address (optional)
                 <textarea
                   className="input-field"
-                  placeholder="List your allergies (e.g. fragrance, nuts, niacinamide...)"
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
+                  placeholder="Street, city, postcode (optional)"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
                   rows={3}
-                  style={{ marginTop: 10, resize: "vertical" }}
+                  style={{ resize: "vertical" }}
                 />
-              )}
-            </div>
+              </label>
 
-            <div className="auth-actions">
-              <button type="submit" className="primary-btn">
-                Register
-              </button>
-              <Link to="/login" className="secondary-link">
-                Already have an account? Log in
-              </Link>
-            </div>
+              <div className="input-label" style={{ marginTop: 8 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                  Do you have any allergies?
+                </div>
 
-            {errorMsg && <p className="error-msg">{errorMsg}</p>}
-            {successMsg && <p className="success-msg">{successMsg}</p>}
-          </form>
+                <div className="auth-toggle-row">
+                  <button
+                    type="button"
+                    className={hasAllergies === "yes" ? "mode-btn active" : "mode-btn"}
+                    onClick={() => selectAllergies("yes")}
+                  >
+                    Yes
+                  </button>
+
+                  <button
+                    type="button"
+                    className={hasAllergies === "no" ? "mode-btn active" : "mode-btn"}
+                    onClick={() => selectAllergies("no")}
+                  >
+                    No
+                  </button>
+                </div>
+
+                {hasAllergies === "yes" && (
+                  <textarea
+                    className="input-field"
+                    placeholder="List your allergies (e.g. fragrance, nuts, niacinamide...)"
+                    value={allergies}
+                    onChange={(e) => setAllergies(e.target.value)}
+                    rows={3}
+                    style={{ marginTop: 10, resize: "vertical" }}
+                  />
+                )}
+              </div>
+
+              <div className="auth-actions">
+                <button type="submit" className="primary-btn">
+                  Register
+                </button>
+                <Link to="/login" className="secondary-link">
+                  Already have an account? Log in
+                </Link>
+              </div>
+
+              {errorMsg && <p className="error-msg">{errorMsg}</p>}
+              {successMsg && <p className="success-msg">{successMsg}</p>}
+            </form>
+          </div>
         </section>
       </main>
 
