@@ -1,0 +1,18 @@
+{
+  "explain_refine_cfg": {
+    "acne": { "percentile": 84.0, "blur_radius": 1.8 },
+    "bags": { "percentile": 88.0, "blur_radius": 1.6 },
+    "blackheads": { "percentile": 89.0, "blur_radius": 1.6 },
+    "hyperpigmentation": { "percentile": 83.0, "blur_radius": 2.4 },
+    "redness": { "percentile": 82.0, "blur_radius": 2.6 }
+  },
+  "region_consistency_cfg": {
+    "roi_support_margin": 0.03,
+    "roi_prob_cap_for_penalty": 0.72,
+    "ignore_overlap_threshold": 0.55,
+    "no_detector_prob_floor": 0.62,
+    "penalty_low_roi_support": 0.82,
+    "penalty_ignore_overlap": 0.75,
+    "penalty_no_detector_support": 0.8
+  }
+}

@@ -418,6 +418,22 @@ body {
   place-items: center;
 }
 
+.overlay-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.overlay-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
 .face-oval {
   width: 60%;
   height: 75%;
@@ -429,12 +445,64 @@ body {
 .overlay-hint {
   position: absolute;
   bottom: 10px;
-  padding: 6px 10px;
+  max-width: calc(100% - 24px);
+  padding: 7px 12px;
   border-radius: 999px;
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.45);
+  text-align: center;
+  background: rgba(0, 0, 0, 0.56);
   color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(6px);
+}
+
+.camera-live-quality {
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.camera-live-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.camera-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid #e2d7ff;
+  background: #f7f2ff;
+  color: #6f6397;
+  text-transform: capitalize;
+  backdrop-filter: blur(3px);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.camera-pill.ok {
+  border-color: #bde7cb;
+  background: #edf9f1;
+  color: #2f7e49;
+}
+
+.camera-pill.warn {
+  border-color: #f3d6bf;
+  background: rgba(255, 244, 234, 0.92);
+  color: #a1652b;
+}
+
+.camera-pill.bad {
+  border-color: #f1b9c2;
+  background: rgba(255, 238, 241, 0.94);
+  color: #b23a4b;
+}
+
+.camera-live-tip {
+  margin: 0;
+  font-size: 12px;
+  color: #665d8d;
 }
 
 

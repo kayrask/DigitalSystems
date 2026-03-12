@@ -8,7 +8,13 @@ from typing import Optional, List
 from api.quality_gate import assess_image_quality, QualityConfig
 from api.safety_filter import filter_routine_for_user
 from api.outcome_risk import compute_outcome_and_risk
-from api.explainability import gradcam_overlay_base64
+from api.explainability import (
+    gradcam_overlay_base64,
+    gradcam_cam_array,
+    refine_gradcam_mask,
+    make_red_overlay_from_mask,
+    detector_pixel_mask,
+)
 from api.face_crop import crop_face, apply_oval_mask
 from api.face_rois import extract_rois_with_boxes, apply_exclusion_mask_pil
 from api.face_parse import FaceParser, apply_skin_mask
@@ -113,6 +119,54 @@ LOCAL = {"blackheads", "bags"}
 SENSITIVE_TARGETS = {"acne", "redness", "hyperpigmentation"}
 NO_EXCLUDE_ROIS = {"nose"}
 
+# Per-label Grad-CAM refinement tuning (Week 3 calibration pass).
+EXPLAIN_REFINE_CFG = {
+    "acne": {"percentile": 84.0, "blur_radius": 1.8},
+    "bags": {"percentile": 88.0, "blur_radius": 1.6},
+    "blackheads": {"percentile": 89.0, "blur_radius": 1.6},
+    "hyperpigmentation": {"percentile": 83.0, "blur_radius": 2.4},
+    "redness": {"percentile": 82.0, "blur_radius": 2.6},
+}
+
+REGION_CONSISTENCY_CFG = {
+    "roi_support_margin": 0.03,
+    "roi_prob_cap_for_penalty": 0.72,
+    "ignore_overlap_threshold": 0.55,
+    "no_detector_prob_floor": 0.62,
+    "penalty_low_roi_support": 0.82,
+    "penalty_ignore_overlap": 0.75,
+    "penalty_no_detector_support": 0.80,
+}
+
+
+def _load_week3_config() -> None:
+    """
+    Optional runtime override for Week 3 knobs.
+    File: models/week3_consistency_config.json
+    {
+      "explain_refine_cfg": {...},
+      "region_consistency_cfg": {...}
+    }
+    """
+    cfg_path = os.path.join("models", "week3_consistency_config.json")
+    if not os.path.exists(cfg_path):
+        return
+    try:
+        with open(cfg_path, "r") as f:
+            j = json.load(f)
+        for k, v in (j.get("explain_refine_cfg") or {}).items():
+            if isinstance(v, dict):
+                EXPLAIN_REFINE_CFG[k] = {
+                    "percentile": float(v.get("percentile", EXPLAIN_REFINE_CFG.get(k, {}).get("percentile", 86.0))),
+                    "blur_radius": float(v.get("blur_radius", EXPLAIN_REFINE_CFG.get(k, {}).get("blur_radius", 2.0))),
+                }
+        for k, v in (j.get("region_consistency_cfg") or {}).items():
+            if k in REGION_CONSISTENCY_CFG:
+                REGION_CONSISTENCY_CFG[k] = float(v)
+        print(f"[Week3] Loaded consistency config from {cfg_path}")
+    except Exception as e:
+        print(f"[Week3] Failed to load {cfg_path}: {e}")
+
 # YOLO class id mapping (from your data.yaml)
 YOLO_CLASS_IDS = {
     "acne": {0},
@@ -196,6 +250,16 @@ def _retake_guidance_from_quality(quality: dict) -> list[str]:
             tips.append("Move closer; keep your full face large and centered.")
         elif r.startswith("face_off_center"):
             tips.append("Center your face in the guide oval before scanning.")
+        elif r.startswith("uneven_lighting"):
+            tips.append("Use even front lighting and avoid strong side shadows.")
+        elif r.startswith("landmarks_unstable"):
+            tips.append("Keep your head straight and face the camera directly.")
+        elif r.startswith("eye_region_occluded"):
+            tips.append("Make sure both eyes and under-eye regions are clearly visible.")
+        elif r.startswith("face_partially_out_of_frame"):
+            tips.append("Keep your whole face inside the frame; avoid edge clipping.")
+        elif r.startswith("skin_visible_too_low"):
+            tips.append("Remove occlusions like hair, hand, or mask from facial skin area.")
 
     # dedupe while preserving order
     seen = set()
@@ -205,6 +269,155 @@ def _retake_guidance_from_quality(quality: dict) -> list[str]:
             seen.add(t)
             out.append(t)
     return out
+
+
+def _add_face_surface_quality_checks(
+    quality: dict,
+    face_img: Image.Image,
+    skin_mask: np.ndarray | None,
+    rois: dict | None,
+) -> dict:
+    """
+    Adds occlusion/lighting/landmark stability checks on the raw face crop.
+    """
+    out = dict(quality)
+    out.setdefault("reasons", [])
+    out.setdefault("metrics", {})
+    out.setdefault("thresholds", {})
+
+    arr = np.asarray(face_img.convert("RGB")).astype(np.float32) / 255.0
+    gray = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
+    h, w = gray.shape
+
+    # Side-shadow / uneven illumination proxy.
+    left = float(gray[:, : max(1, w // 2)].mean())
+    right = float(gray[:, max(1, w // 2):].mean())
+    denom = max(1e-4, (left + right) * 0.5)
+    imbalance = abs(left - right) / denom
+    out["metrics"]["lr_light_imbalance"] = float(imbalance)
+    out["thresholds"]["lr_light_imbalance_max"] = 0.28
+    if imbalance > 0.28:
+        out["reasons"].append(f"uneven_lighting (lr_imbalance={imbalance:.3f})")
+
+    # Skin visibility proxy for occlusion.
+    if skin_mask is not None:
+        sm = np.asarray(skin_mask).astype(np.float32)
+        if sm.max() > 1.0:
+            sm = sm / 255.0
+        skin_visible_ratio = float(np.mean(sm > 0.5))
+        out["metrics"]["skin_visible_ratio"] = skin_visible_ratio
+        out["thresholds"]["skin_visible_ratio_min"] = 0.28
+        if skin_visible_ratio < 0.28:
+            out["reasons"].append(f"skin_visible_too_low (ratio={skin_visible_ratio:.3f})")
+
+    rois = rois or {}
+    left_eye = rois.get("under_eye_left")
+    right_eye = rois.get("under_eye_right")
+    if not left_eye or not right_eye:
+        out["reasons"].append("landmarks_unstable")
+    else:
+        for side, roi in (("left", left_eye), ("right", right_eye)):
+            x1, y1, x2, y2 = [int(v) for v in roi["box"]]
+            if x1 <= 2 or y1 <= 2 or x2 >= (w - 2) or y2 >= (h - 2):
+                out["reasons"].append(f"face_partially_out_of_frame ({side})")
+                continue
+            if skin_mask is not None:
+                sm = np.asarray(skin_mask).astype(np.float32)
+                if sm.max() > 1.0:
+                    sm = sm / 255.0
+                roi_sm = sm[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+                if roi_sm.size > 0:
+                    vis = float(np.mean(roi_sm > 0.5))
+                    out["metrics"][f"under_eye_{side}_skin_ratio"] = vis
+                    if vis < 0.20:
+                        out["reasons"].append(f"eye_region_occluded ({side}, ratio={vis:.3f})")
+
+    out["passed"] = len(out["reasons"]) == 0
+    return out
+
+
+def _box_ignore_overlap(box_xyxy: list[float], ignore_mask: np.ndarray) -> float:
+    """
+    Fraction of box pixels that overlap ignore mask.
+    """
+    if ignore_mask is None:
+        return 0.0
+    h, w = ignore_mask.shape[:2]
+    x1, y1, x2, y2 = [int(round(v)) for v in box_xyxy]
+    x1 = max(0, min(w - 1, x1))
+    y1 = max(0, min(h - 1, y1))
+    x2 = max(0, min(w, x2))
+    y2 = max(0, min(h, y2))
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+    area = float((x2 - x1) * (y2 - y1))
+    if area <= 0:
+        return 0.0
+    m = ignore_mask[y1:y2, x1:x2]
+    if m.size == 0:
+        return 0.0
+    mm = m.astype(np.float32)
+    if mm.max() > 1.0:
+        mm = mm / 255.0
+    return float(np.mean(mm > 0.5))
+
+
+def _apply_regional_consistency(
+    results: dict,
+    thr_map: dict,
+    roi_evidence: dict,
+    det_count: dict,
+    yolo_boxes: list[dict],
+    ignore_mask: np.ndarray | None,
+    cfg: dict | None = None,
+) -> tuple[dict, dict]:
+    """
+    Week 3: penalize inconsistent positives using ROI support and ignore-zone overlap.
+    """
+    cfg = cfg or REGION_CONSISTENCY_CFG
+    out = {k: {"probability": float(v["probability"]), "prediction": int(v["prediction"])} for k, v in results.items()}
+    diag = {}
+
+    for label in ["blackheads", "bags"]:
+        if label not in out:
+            continue
+
+        prob = float(out[label]["probability"])
+        thr = float(thr_map.get(label, 0.5))
+        pred = int(out[label]["prediction"])
+        reasons = []
+        roi_prob = roi_evidence.get(label)
+
+        if pred == 1 and roi_prob is not None and roi_prob < (thr + cfg["roi_support_margin"]) and prob < cfg["roi_prob_cap_for_penalty"]:
+            prob *= cfg["penalty_low_roi_support"]
+            reasons.append("low_roi_support")
+
+        # If detector boxes mostly live in ignored zones (brow/lip/beard), downweight.
+        ids = YOLO_CLASS_IDS.get(label, set())
+        overlaps = []
+        for b in yolo_boxes or []:
+            if int(b.get("cls", -1)) in ids:
+                overlaps.append(_box_ignore_overlap(b.get("box", [0, 0, 0, 0]), ignore_mask))
+        max_ov = max(overlaps) if overlaps else 0.0
+        if pred == 1 and max_ov >= cfg["ignore_overlap_threshold"] and prob < cfg["roi_prob_cap_for_penalty"]:
+            prob *= cfg["penalty_ignore_overlap"]
+            reasons.append("high_ignore_zone_overlap")
+
+        if pred == 1 and det_count.get(label, 0) == 0 and prob < max(cfg["no_detector_prob_floor"], thr + 0.08):
+            prob *= cfg["penalty_no_detector_support"]
+            reasons.append("no_detector_support")
+
+        prob = float(np.clip(prob, 0.0, 1.0))
+        out[label]["probability"] = prob
+        out[label]["prediction"] = int(prob >= thr)
+        diag[label] = {
+            "roi_prob": None if roi_prob is None else float(roi_prob),
+            "det_count": int(det_count.get(label, 0)),
+            "max_ignore_overlap": float(max_ov),
+            "reasons": reasons,
+        }
+
+    return out, diag
 
 
 def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> tuple[dict, dict]:
@@ -448,6 +661,33 @@ def pil_to_base64_png(img: Image.Image) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def mask01_to_base64_png(mask01: np.ndarray) -> str:
+    arr = np.asarray(mask01, dtype=np.float32)
+    arr = np.clip(arr, 0.0, 1.0)
+    img = Image.fromarray((arr * 255.0).astype(np.uint8), mode="L")
+    return pil_to_base64_png(img)
+
+
+def face_mask_to_full_mask01(mask_face: np.ndarray, bbox: dict, full_size_wh: tuple[int, int]) -> np.ndarray:
+    fw, fh = int(full_size_wh[0]), int(full_size_wh[1])
+    full = np.zeros((fh, fw), dtype=np.float32)
+    bx, by = int(bbox["x"]), int(bbox["y"])
+    bw, bh = int(bbox["w"]), int(bbox["h"])
+    if bw <= 0 or bh <= 0:
+        return full
+    m = np.asarray(mask_face, dtype=np.float32)
+    m_img = Image.fromarray((np.clip(m, 0.0, 1.0) * 255.0).astype(np.uint8), mode="L")
+    m_img = m_img.resize((bw, bh), resample=Image.Resampling.BILINEAR)
+    m_arr = np.asarray(m_img, dtype=np.float32) / 255.0
+    x2 = min(fw, bx + bw)
+    y2 = min(fh, by + bh)
+    w = max(0, x2 - bx)
+    h = max(0, y2 - by)
+    if w > 0 and h > 0:
+        full[by:y2, bx:x2] = np.maximum(full[by:y2, bx:x2], m_arr[:h, :w])
+    return full
+
+
 def _get_concern_prob(results_obj: dict, label: str) -> float:
     """
     Extract concern probability from either:
@@ -660,6 +900,7 @@ def simulate_expected_outcome(
 
 @app.on_event("startup")
 def on_startup():
+    _load_week3_config()
     init_db()
 
 
@@ -764,9 +1005,18 @@ async def predict(
     
 
 
-    # === Phase 1 Quality Gate should run on the face crop ===
-    quality = assess_image_quality(face_img, QualityConfig(min_short_side=240))
+    # Extract ROIs once (used by quality checks + inference + explainability).
+    try:
+        rois = extract_rois_with_boxes(face_img_raw)
+    except Exception as e:
+        print("ROI extraction failed:", e)
+        rois = {}
+
+    # === Phase 1 Quality Gate ===
+    # Run on RAW face crop (not oval-masked) for more reliable metrics.
+    quality = assess_image_quality(face_img_raw, QualityConfig(min_short_side=240))
     quality = _add_face_pose_quality_checks(quality, face_meta, image_full)
+    quality = _add_face_surface_quality_checks(quality, face_img_raw, skin_mask, rois)
     retake_guidance = _retake_guidance_from_quality(quality)
     if not quality["passed"]:
         return {
@@ -786,12 +1036,7 @@ async def predict(
     skin_type_out = skin_type_model.predict(face_img_raw)
     skin_type = skin_type_out["skin_type"]
 
-    # Extract ROIs (auto from FaceMesh)
-    try:
-        rois = extract_rois_with_boxes(face_img_raw)
-    except Exception as e:
-        print("ROI extraction failed:", e)
-        rois = {}
+    # Reuse precomputed ROIs
     exclusion_mask = rois.get("exclude_mouth_moustache_mask")
     # Base full-face prediction
     results_full = model.predict(
@@ -815,8 +1060,10 @@ async def predict(
 
     # Aggregate probabilities using ROIs only for localized labels.
     results = {}
+    roi_evidence = {}
     for label in LABELS:
         probs = [float(results_full[label]["probability"])]
+        roi_probs = []
 
         for rk in LABEL_TO_ROIS.get(label, []):
             roi = rois.get(rk)
@@ -838,7 +1085,9 @@ async def predict(
                 tone_group=tone_out["group"],
                 tone_conf=tone_out["confidence"],
             )
-            probs.append(float(roi_pred[label]["probability"]))
+            p_roi = float(roi_pred[label]["probability"])
+            probs.append(p_roi)
+            roi_probs.append(p_roi)
 
         if label in DIFFUSE:
             best_prob = float(np.mean(sorted(probs)[-2:]))
@@ -850,6 +1099,7 @@ async def predict(
             "probability": best_prob,
             "prediction": int(best_prob >= thr),
         }
+        roi_evidence[label] = (float(max(roi_probs)) if roi_probs else None)
 
     # --- YOLO detection on face crop (for sanity + localization) ---
     try:
@@ -877,6 +1127,17 @@ async def predict(
             results[lbl]["probability"] = float(results[lbl]["probability"] * 0.35)
             thr = float(thr_map.get(lbl, 0.5))
             results[lbl]["prediction"] = int(results[lbl]["probability"] >= thr)
+
+    # Week 3: regional consistency penalties (ROI support + ignore-zone overlap)
+    ignore_mask = rois.get("exclude_visual_ignore_mask")
+    results, region_consistency = _apply_regional_consistency(
+        results=results,
+        thr_map=thr_map,
+        roi_evidence=roi_evidence,
+        det_count=det_count,
+        yolo_boxes=yolo_boxes,
+        ignore_mask=ignore_mask,
+    )
 
     # Confidence/uncertainty gating to suppress weak detections
     results, uncertainty = _apply_uncertainty_gating(results, thr_map, det_count)
@@ -915,6 +1176,7 @@ async def predict(
         "retake_guidance": retake_guidance,
         "results": results,
         "uncertainty": uncertainty,
+        "region_consistency": region_consistency,
         "skin_type": skin_type_out,
         "routine_raw": routine_raw,
         "routine": routine_filtered,
@@ -1519,7 +1781,7 @@ def save_admin_annotations(data: AnnotationSave):
         raise HTTPException(status_code=500, detail="Database error")
     
 @app.get("/explain")
-def explain(scan_id: int, target: str):
+def explain(scan_id: int, target: str, debug: bool = False):
     """
     Returns Grad-CAM overlay pasted onto the FULL image.
     target: acne | redness | blackheads | bags | hyperpigmentation
@@ -1558,7 +1820,7 @@ def explain(scan_id: int, target: str):
         # Always derive face crop from the full image + bbox to avoid oval-masked artifacts.
         face_img = full_img.crop((bx, by, bx + bw, by + bh)).convert("RGB")
 
-        # If we have YOLO, use boxes for localized issues instead of Grad-CAM
+        # If we have YOLO, use pixel-corrected localized overlays instead of Grad-CAM
         LOCALIZED = {"acne", "blackheads", "bags"}
         if target in LOCALIZED:
             yolo_boxes = yolo_detector.predict(
@@ -1570,22 +1832,26 @@ def explain(scan_id: int, target: str):
             )
             ids = YOLO_CLASS_IDS.get(target, set())
             filtered = [b for b in yolo_boxes if b["cls"] in ids]
-            
-            # Draw boxes on face image and return as base64
-            face_with_boxes = draw_boxes(
-                face_img,
-                filtered,
-                line_width=3,
-                box_color="red",
-                label_color="red"
-            )
-            
-            # Scale face image to fit within full image and overlay at face bbox location
+            detector_mask = detector_pixel_mask(face_img.size, filtered, expansion=0.20, blur_radius=2.2) if filtered else np.zeros((face_img.size[1], face_img.size[0]), dtype=np.float32)
+
+            # Pixel-corrected mask: only detected bits get highlighted.
+            # Still draw thin boxes for debugging/traceability.
+            if filtered:
+                mask_rgba = make_red_overlay_from_mask(detector_mask, strength=0.80)
+                face_overlay = Image.alpha_composite(face_img.convert("RGBA"), mask_rgba)
+                face_with_boxes = draw_boxes(
+                    face_overlay.convert("RGB"),
+                    filtered,
+                    line_width=2,
+                    box_color="red",
+                    label_color="red",
+                )
+            else:
+                face_with_boxes = face_img.convert("RGB")
+
             full_img_copy = full_img.copy()
             face_with_boxes_scaled = face_with_boxes.resize((bw, bh), Image.Resampling.LANCZOS)
             full_img_copy.paste(face_with_boxes_scaled, (bx, by))
-            
-            # Convert full image with boxes to base64
             full_b64 = pil_to_base64_png(full_img_copy)
             
             # Also compute detection count for response
@@ -1604,24 +1870,33 @@ def explain(scan_id: int, target: str):
                     "bbox_full": bfull,
                 })
             
-            return {
+            resp = {
                 "ok": True,
                 "target": target,
                 "type": "boxes",
-                "source": "detector",
+                "source": "detector_pixel",
                 "image_png_base64": full_b64,
                 "detections": detections,
                 "face_size": {"w": face_w, "h": face_h},
                 "full_size": {"w": full_w, "h": full_h},
                 "detection_count": len(detections),
             }
+            if debug:
+                detector_full = face_mask_to_full_mask01(detector_mask, bbox, (full_w, full_h))
+                resp["debug"] = {
+                    "detector_mask_face_png_base64": mask01_to_base64_png(detector_mask),
+                    "detector_mask_full_png_base64": mask01_to_base64_png(detector_full),
+                }
+            return resp
 
         skin_mask = face_parser.skin_mask(face_img)
         skin_only_img = apply_skin_mask(face_img, skin_mask)
 
         # 1) ROI-aware Grad-CAM (localized) or full-face Grad-CAM (diffuse)
         rois = extract_rois_with_boxes(face_img)
-        exclusion_mask = rois.get("exclude_mouth_moustache_mask")
+        exclusion_mask = rois.get("exclude_visual_ignore_mask")
+        if exclusion_mask is None:
+            exclusion_mask = rois.get("exclude_mouth_moustache_mask")
         roi_keys = LABEL_TO_ROIS.get(target, [])
 
         shadow_score = compute_shadow_score(face_img)
@@ -1629,15 +1904,26 @@ def explain(scan_id: int, target: str):
 
         # Build a transparent overlay canvas in face-image coordinates
         face_overlay_canvas = Image.new("RGBA", face_img.size, (0, 0, 0, 0))
+        raw_cam_canvas = np.zeros((face_img.size[1], face_img.size[0]), dtype=np.float32)
+        refined_canvas = np.zeros((face_img.size[1], face_img.size[0]), dtype=np.float32)
 
         if not roi_keys:
             explain_img = skin_only_img
+            cam_exclude = None
             if exclusion_mask is not None and target in SENSITIVE_TARGETS:
                 explain_img = apply_exclusion_mask_pil(explain_img, exclusion_mask)
-            out = gradcam_overlay_base64(model, explain_img, target_label=target)
-            face_overlay_canvas = base64png_to_pil_rgba(out["overlay_png_base64"]).resize(
-                face_img.size
-            ).convert("RGBA")
+                cam_exclude = exclusion_mask
+            cam = gradcam_cam_array(model, explain_img, target_label=target)
+            cfg = EXPLAIN_REFINE_CFG.get(target, {})
+            refined = refine_gradcam_mask(
+                cam,
+                exclude_mask=cam_exclude,
+                percentile=float(cfg.get("percentile", 86.0)),
+                blur_radius=float(cfg.get("blur_radius", 2.0)),
+            )
+            raw_cam_canvas = np.maximum(raw_cam_canvas, cam)
+            refined_canvas = np.maximum(refined_canvas, refined)
+            face_overlay_canvas = make_red_overlay_from_mask(refined, strength=0.82).convert("RGBA")
         else:
             for rk in roi_keys:
                 roi = rois.get(rk)
@@ -1654,20 +1940,39 @@ def explain(scan_id: int, target: str):
                     exclude_crop = exclusion_mask[y1:y2, x1:x2]
                     roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
 
-                # Grad-CAM on ROI crop
-                out = gradcam_overlay_base64(model, roi_img, target_label=target)
-                roi_overlay = base64png_to_pil_rgba(out["overlay_png_base64"])
-                if exclude_crop is not None:
-                    ov = np.array(roi_overlay)
-                    h = min(ov.shape[0], exclude_crop.shape[0])
-                    w = min(ov.shape[1], exclude_crop.shape[1])
-                    ov[:h, :w, 3][exclude_crop[:h, :w].astype(bool)] = 0
-                    roi_overlay = Image.fromarray(ov, mode="RGBA")
+                # Grad-CAM on ROI crop + refinement
+                cam = gradcam_cam_array(model, roi_img, target_label=target)
+                cfg = EXPLAIN_REFINE_CFG.get(target, {})
+                refined = refine_gradcam_mask(
+                    cam,
+                    exclude_mask=exclude_crop,
+                    percentile=float(cfg.get("percentile", 86.0)),
+                    blur_radius=float(cfg.get("blur_radius", 2.0)),
+                )
+                roi_overlay = make_red_overlay_from_mask(refined, strength=0.82)
 
                 # Resize overlay to ROI size and composite onto face canvas
                 roi_w = max(1, int(x2 - x1))
                 roi_h = max(1, int(y2 - y1))
                 roi_overlay = roi_overlay.resize((roi_w, roi_h)).convert("RGBA")
+                cam_resized = np.asarray(
+                    Image.fromarray((np.clip(cam, 0.0, 1.0) * 255.0).astype(np.uint8), mode="L").resize(
+                        (roi_w, roi_h), resample=Image.Resampling.BILINEAR
+                    ),
+                    dtype=np.float32,
+                ) / 255.0
+                refined_resized = np.asarray(
+                    Image.fromarray((np.clip(refined, 0.0, 1.0) * 255.0).astype(np.uint8), mode="L").resize(
+                        (roi_w, roi_h), resample=Image.Resampling.BILINEAR
+                    ),
+                    dtype=np.float32,
+                ) / 255.0
+                raw_cam_canvas[y1:y1 + roi_h, x1:x1 + roi_w] = np.maximum(
+                    raw_cam_canvas[y1:y1 + roi_h, x1:x1 + roi_w], cam_resized
+                )
+                refined_canvas[y1:y1 + roi_h, x1:x1 + roi_w] = np.maximum(
+                    refined_canvas[y1:y1 + roi_h, x1:x1 + roi_w], refined_resized
+                )
 
                 region_face = face_overlay_canvas.crop((x1, y1, x1 + roi_w, y1 + roi_h))
                 region_face = Image.alpha_composite(region_face, roi_overlay)
@@ -1693,13 +1998,31 @@ def explain(scan_id: int, target: str):
         # return base64 of composited full image overlay
         full_b64 = pil_to_base64_png(full_rgba)
 
-        return {
+        resp = {
             "ok": True,
             "target": target,
             "type": "overlay",
             "source": "classifier",
             "overlay_png_base64": full_b64,
         }
+        if debug:
+            full_w, full_h = full_img.size
+            raw_full = face_mask_to_full_mask01(raw_cam_canvas, bbox, (full_w, full_h))
+            refined_full = face_mask_to_full_mask01(refined_canvas, bbox, (full_w, full_h))
+            dbg = {
+                "raw_cam_face_png_base64": mask01_to_base64_png(raw_cam_canvas),
+                "refined_mask_face_png_base64": mask01_to_base64_png(refined_canvas),
+                "raw_cam_full_png_base64": mask01_to_base64_png(raw_full),
+                "refined_mask_full_png_base64": mask01_to_base64_png(refined_full),
+            }
+            if exclusion_mask is not None:
+                ex = np.clip(exclusion_mask.astype(np.float32), 0.0, 1.0)
+                dbg["ignore_mask_face_png_base64"] = mask01_to_base64_png(ex)
+                dbg["ignore_mask_full_png_base64"] = mask01_to_base64_png(
+                    face_mask_to_full_mask01(ex, bbox, (full_w, full_h))
+                )
+            resp["debug"] = dbg
+        return resp
 
     except HTTPException:
         raise

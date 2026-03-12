@@ -23,6 +23,16 @@ function Scan() {
   const [error, setError] = useState("");
 
   const webcamRef = useRef(null);
+  const [cameraGuide, setCameraGuide] = useState({
+    ready: false,
+    lighting: "unknown",
+    lightingLevel: "warn",
+    sharpness: "unknown",
+    sharpnessLevel: "warn",
+    contrast: "unknown",
+    contrastLevel: "warn",
+    tip: "Checking camera conditions...",
+  });
 
   useEffect(() => {
     const storedUser =
@@ -69,6 +79,145 @@ function Scan() {
     setPreviewUrl(imageSrc);
   };
 
+  const analyzeCameraFrame = async (imageSrc) => {
+    if (!imageSrc) return null;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const targetW = 256;
+        const targetH = 256;
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const { data } = ctx.getImageData(0, 0, targetW, targetH);
+
+        const gray = new Float32Array(targetW * targetH);
+        let sum = 0;
+        for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+          const g = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+          gray[p] = g;
+          sum += g;
+        }
+        const mean = sum / gray.length;
+        let varAcc = 0;
+        for (let i = 0; i < gray.length; i += 1) {
+          const d = gray[i] - mean;
+          varAcc += d * d;
+        }
+        const std = Math.sqrt(varAcc / gray.length);
+
+        // Laplacian variance (blur proxy)
+        let lapSum = 0;
+        let lapSq = 0;
+        let n = 0;
+        for (let y = 1; y < targetH - 1; y += 1) {
+          for (let x = 1; x < targetW - 1; x += 1) {
+            const c = gray[y * targetW + x];
+            const l = gray[y * targetW + (x - 1)];
+            const r = gray[y * targetW + (x + 1)];
+            const u = gray[(y - 1) * targetW + x];
+            const d = gray[(y + 1) * targetW + x];
+            const lap = (l + r + u + d - 4 * c);
+            lapSum += lap;
+            lapSq += lap * lap;
+            n += 1;
+          }
+        }
+        const lapMean = lapSum / Math.max(1, n);
+        const lapVar = lapSq / Math.max(1, n) - lapMean * lapMean;
+
+        resolve({
+          brightness: mean,
+          contrast: std,
+          blurVar: Math.max(0, lapVar),
+        });
+      };
+      img.onerror = () => resolve(null);
+      img.src = imageSrc;
+    });
+  };
+
+  useEffect(() => {
+    if (mode !== "camera") return undefined;
+    let cancelled = false;
+
+    const tick = async () => {
+      if (!webcamRef.current) return;
+      const shot = webcamRef.current.getScreenshot();
+      if (!shot) return;
+      const m = await analyzeCameraFrame(shot);
+      if (!m || cancelled) return;
+
+      let lighting = "good";
+      let lightingLevel = "ok";
+      if (m.brightness < 0.16) {
+        lighting = "very dark";
+        lightingLevel = "bad";
+      } else if (m.brightness < 0.24) {
+        lighting = "dark";
+        lightingLevel = "warn";
+      } else if (m.brightness > 0.92) {
+        lighting = "very bright";
+        lightingLevel = "bad";
+      } else if (m.brightness > 0.84) {
+        lighting = "bright";
+        lightingLevel = "warn";
+      }
+
+      let contrast = "good";
+      let contrastLevel = "ok";
+      if (m.contrast < 0.040) {
+        contrast = "very low";
+        contrastLevel = "bad";
+      } else if (m.contrast < 0.055) {
+        contrast = "low";
+        contrastLevel = "warn";
+      }
+
+      let sharpness = "good";
+      let sharpnessLevel = "ok";
+      if (m.blurVar < 0.0012) {
+        sharpness = "very blurry";
+        sharpnessLevel = "bad";
+      } else if (m.blurVar < 0.0020) {
+        sharpness = "blurry";
+        sharpnessLevel = "warn";
+      }
+
+      let tip = "Great conditions. Keep your face centered inside the oval.";
+      if (lightingLevel === "bad") tip = "Do not capture yet: fix lighting first.";
+      else if (sharpnessLevel === "bad") tip = "Do not capture yet: image is too blurry.";
+      else if (contrastLevel === "bad") tip = "Do not capture yet: scene contrast is too low.";
+      else if (lightingLevel === "warn") tip = "Improve front lighting for more reliable analysis.";
+      else if (sharpnessLevel === "warn") tip = "Hold still and let the camera focus before capture.";
+      else if (contrastLevel === "warn") tip = "Use more even lighting to improve skin detail contrast.";
+
+      setCameraGuide({
+        ready: true,
+        lighting,
+        lightingLevel,
+        sharpness,
+        sharpnessLevel,
+        contrast,
+        contrastLevel,
+        tip,
+      });
+    };
+
+    tick();
+    const id = setInterval(tick, 1400);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [mode]);
+
   const prettyQualityReason = (r) => {
     if (!r) return "Unknown issue";
     if (r.startsWith("too_dark")) return "Too dark (increase lighting)";
@@ -78,6 +227,11 @@ function Scan() {
     if (r.startsWith("low_resolution")) return "Low resolution (use higher quality image)";
     if (r.startsWith("face_too_small")) return "Face too small in frame (move closer)";
     if (r.startsWith("face_off_center")) return "Face is off-center (align inside guide)";
+    if (r.startsWith("uneven_lighting")) return "Uneven lighting / side shadow (use front light)";
+    if (r.startsWith("landmarks_unstable")) return "Face landmarks unstable (face camera directly)";
+    if (r.startsWith("eye_region_occluded")) return "Eye region occluded (remove glasses/hair obstruction)";
+    if (r.startsWith("face_partially_out_of_frame")) return "Face partly out of frame (re-center in camera)";
+    if (r.startsWith("skin_visible_too_low")) return "Too much occlusion over skin (remove mask/hand/hair)";
     return r;
   };
 
@@ -273,9 +427,22 @@ function Scan() {
 
                 {/* Overlay guide */}
                 <div className="face-overlay" aria-hidden="true">
+                  <div className="overlay-status">
+                    <div className="overlay-status-pills">
+                      <span className={`camera-pill ${cameraGuide.lightingLevel}`}>
+                        Light: {cameraGuide.lighting}
+                      </span>
+                      <span className={`camera-pill ${cameraGuide.sharpnessLevel}`}>
+                        Focus: {cameraGuide.sharpness}
+                      </span>
+                      <span className={`camera-pill ${cameraGuide.contrastLevel}`}>
+                        Contrast: {cameraGuide.contrast}
+                      </span>
+                    </div>
+                  </div>
                   <div className="face-oval" />
                   <div className="overlay-hint">
-                    Align your face inside the outline
+                    {cameraGuide.tip}
                   </div>
                 </div>
               </div>

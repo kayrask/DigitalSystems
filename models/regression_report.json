@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-02-12T00:29:52.008360",
+  "generated_at_utc": "2026-03-10T13:58:14.265368",
   "api": "http://127.0.0.1:8000/predict",
   "summary": {
     "total": 30,
@@ -35,7 +35,55 @@
           "probability": 0.04522504284977913,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.24259483253955838,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.19723787307739257,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7603901351764798,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.27456403005123137,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.45477495715022087,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_002",
@@ -64,7 +112,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_003",
@@ -93,7 +190,52 @@
           "probability": 0.18957464396953583,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.6277703199386597,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.365025395154953,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.770367067489773,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.275897512614727,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.3104253560304642,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_004",
@@ -122,7 +264,56 @@
           "probability": 0.0060302517376840115,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21371262371540067,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.1452985048294067,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445149766281247,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.3384434625506401,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.493969748262316,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_005",
@@ -151,7 +342,56 @@
           "probability": 0.0060302517376840115,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21371262371540067,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.1452985048294067,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445149766281247,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.3384434625506401,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.493969748262316,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_006",
@@ -180,7 +420,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_007",
@@ -209,7 +498,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_008",
@@ -238,7 +576,53 @@
           "probability": 0.24990098178386688,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.681568220615387,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.23628803491592407,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7721219526566565,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.2797098582908511,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.2500990182161331,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_009",
@@ -249,6 +633,8 @@
       ],
       "violations": [],
       "results": null,
+      "uncertainty": null,
+      "region_consistency": null,
       "quality": {
         "passed": false,
         "reasons": [
@@ -302,7 +688,52 @@
           "probability": 0.48187509179115295,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.6032982025146485,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.48667618036270144,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7706479353792965,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.2877754554450512,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.018124908208847046,
+          "suppressed": false,
+          "reasons": [
+            "near_threshold"
+          ],
+          "confidence_band": "low"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_011",
@@ -331,7 +762,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_012",
@@ -360,7 +840,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_013",
@@ -389,7 +918,56 @@
           "probability": 0.006031426135450602,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.05,
+          "floor": 0.55,
+          "margin": 0.21364778578281401,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.14266128242015835,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.65,
+          "floor": 0.45,
+          "margin": 0.6445161246694625,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.45,
+          "floor": 0.55,
+          "margin": 0.33849957287311555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4939685738645494,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_014",
@@ -400,6 +978,8 @@
       ],
       "violations": [],
       "results": null,
+      "uncertainty": null,
+      "region_consistency": null,
       "quality": {
         "passed": false,
         "reasons": [
@@ -453,7 +1033,55 @@
           "probability": 0.04522504284977913,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.24259483253955838,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.19723787307739257,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7603901351764798,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.27456403005123137,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.45477495715022087,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_016",
@@ -482,7 +1110,53 @@
           "probability": 0.595430314540863,
           "prediction": 1
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.13621880960464483,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.09266900420188903,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.42122388125583526,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7972787307202815,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.09543031454086304,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_017",
@@ -511,7 +1185,53 @@
           "probability": 0.595430314540863,
           "prediction": 1
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.13621880960464483,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.09266900420188903,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.42122388125583526,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7972787307202815,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.09543031454086304,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_018",
@@ -540,7 +1260,53 @@
           "probability": 0.08966413140296936,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.7087425742149354,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.32748874425888064,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7044331283271313,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.26300079602003096,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.41033586859703064,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_019",
@@ -569,7 +1335,53 @@
           "probability": 0.08952092379331589,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.7094473991394044,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.32641013860702517,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7044025556147099,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.2629541851878166,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.4104790762066841,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_020",
@@ -598,7 +1410,50 @@
           "probability": 0.17987164855003357,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.45287167626619335,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.7787338137626648,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.42205297050252555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7986646076291799,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.32012835144996643,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_021",
@@ -627,7 +1482,53 @@
           "probability": 0.06662095338106155,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.1296530003547669,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.19536563158035278,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.4043968750834465,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7811124423146247,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.43337904661893845,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_022",
@@ -656,7 +1557,53 @@
           "probability": 0.08966413140296936,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.7087425742149354,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.32748874425888064,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7044331283271313,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.26300079602003096,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.41033586859703064,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_023",
@@ -685,7 +1632,54 @@
           "probability": 0.07202187925577164,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.1737852926254273,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.05000398457050323,
+          "suppressed": true,
+          "reasons": [
+            "near_threshold",
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "low"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.3983592859208584,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7196065956354141,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.42797812074422836,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_024",
@@ -714,7 +1708,54 @@
           "probability": 0.07202187925577164,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.1737852926254273,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.05000398457050323,
+          "suppressed": true,
+          "reasons": [
+            "near_threshold",
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "low"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.3983592859208584,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7196065956354141,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.42797812074422836,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_025",
@@ -743,7 +1784,50 @@
           "probability": 0.17987164855003357,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.45287167626619335,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.7787338137626648,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.42205297050252555,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.7986646076291799,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.32012835144996643,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_026",
@@ -772,7 +1856,54 @@
           "probability": 0.03477734699845314,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.483019719004631,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.17749158143997187,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive",
+            "yolo_disagree"
+          ],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.4073529387563467,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.6512310826778411,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.46522265300154686,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_027",
@@ -801,7 +1932,50 @@
           "probability": 0.39335110783576965,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.12119818377494807,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.41193279027938845,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.41341550450026987,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.4685604596138,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.10664889216423035,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_028",
@@ -830,7 +2004,56 @@
           "probability": 0.3977189362049103,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.059,
+          "floor": 0.55,
+          "margin": 0.3848234567642212,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.022441855072975164,
+          "suppressed": false,
+          "reasons": [
+            "near_threshold"
+          ],
+          "confidence_band": "low"
+        },
+        "blackheads": {
+          "threshold": 0.779,
+          "floor": 0.45,
+          "margin": 0.7636965372562409,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.293,
+          "floor": 0.55,
+          "margin": 0.062312198400497454,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor"
+          ],
+          "confidence_band": "low"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.10228106379508972,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_029",
@@ -859,7 +2082,53 @@
           "probability": 0.3731420636177063,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.2785915796756744,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.13350249230861663,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.4118563326746225,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.4177029156684875,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.1268579363822937,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "medium"
+        }
+      },
+      "region_consistency": null
     },
     {
       "id": "case_030",
@@ -888,7 +2157,55 @@
           "probability": 0.3138295114040375,
           "prediction": 0
         }
-      }
+      },
+      "uncertainty": {
+        "acne": {
+          "threshold": 0.563,
+          "floor": 0.55,
+          "margin": 0.021347963333129938,
+          "suppressed": false,
+          "reasons": [
+            "near_threshold"
+          ],
+          "confidence_band": "low"
+        },
+        "bags": {
+          "threshold": 0.1,
+          "floor": 0.5,
+          "margin": 0.12058703005313873,
+          "suppressed": true,
+          "reasons": [
+            "below_label_floor",
+            "weak_positive"
+          ],
+          "confidence_band": "medium"
+        },
+        "blackheads": {
+          "threshold": 0.428,
+          "floor": 0.45,
+          "margin": 0.4184075370170176,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "hyperpigmentation": {
+          "threshold": 0.815,
+          "floor": 0.55,
+          "margin": 0.6799377524852752,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        },
+        "redness": {
+          "threshold": 0.5,
+          "floor": 0.55,
+          "margin": 0.18617048859596252,
+          "suppressed": false,
+          "reasons": [],
+          "confidence_band": "high"
+        }
+      },
+      "region_consistency": null
     }
   ]
 }

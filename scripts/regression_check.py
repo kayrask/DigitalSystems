@@ -50,6 +50,8 @@ def main():
             "errors": [],
             "violations": [],
             "results": None,
+            "uncertainty": None,
+            "region_consistency": None,
         }
 
         try:
@@ -75,6 +77,8 @@ def main():
 
         pred = payload.get("results", {})
         result["results"] = pred
+        result["uncertainty"] = payload.get("uncertainty")
+        result["region_consistency"] = payload.get("region_consistency")
 
         for label in exp_absent:
             if int(pred.get(label, {}).get("prediction", 0)) == 1:

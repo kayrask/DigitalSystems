@@ -17,6 +17,8 @@ NOSE_LM = [1, 2, 98, 327, 168, 197, 195, 5]
 # Eye contours (we derive under-eye by shifting bbox down)
 LEFT_EYE_LM  = [33, 133, 160, 159, 158, 157, 173, 246]
 RIGHT_EYE_LM = [263, 362, 387, 386, 385, 384, 398, 466]
+LEFT_BROW_LM = [70, 63, 105, 66, 107]
+RIGHT_BROW_LM = [336, 296, 334, 293, 300]
 
 # Cheek reference points (mid-cheek area)
 LEFT_CHEEK_LM  = [50, 101, 205, 206]
@@ -84,6 +86,62 @@ def build_mouth_moustache_exclusion_mask(
     band_y1 = y0
     arr[band_y0 : band_y1 + 1, x0e : x1e + 1] = 1
     return arr
+
+
+def _fill_rect(arr: np.ndarray, x1: int, y1: int, x2: int, y2: int, value: int = 1) -> None:
+    h, w = arr.shape[:2]
+    xa = max(0, min(w, int(x1)))
+    xb = max(0, min(w, int(x2)))
+    ya = max(0, min(h, int(y1)))
+    yb = max(0, min(h, int(y2)))
+    if xb > xa and yb > ya:
+        arr[ya:yb, xa:xb] = value
+
+
+def build_visual_ignore_mask(
+    img_bgr_or_rgb: np.ndarray,
+    landmarks,
+) -> np.ndarray:
+    """
+    Combined exclusion mask for visualization cleanup:
+    - lips + moustache
+    - eyebrows
+    - upper hairline band
+    - beard-prone lower face area
+    """
+    h, w = img_bgr_or_rgb.shape[:2]
+    out = build_mouth_moustache_exclusion_mask(img_bgr_or_rgb, landmarks)
+
+    # Eyebrows: use landmark bbox plus a vertical expansion.
+    l_brow = np.array([_lm_to_px(landmarks[i], w, h) for i in LEFT_BROW_LM], dtype=np.int32)
+    r_brow = np.array([_lm_to_px(landmarks[i], w, h) for i in RIGHT_BROW_LM], dtype=np.int32)
+    for brow in (l_brow, r_brow):
+        bx1, by1 = brow[:, 0].min(), brow[:, 1].min()
+        bx2, by2 = brow[:, 0].max(), brow[:, 1].max()
+        bh = max(6, int(by2 - by1 + 1))
+        pad_x = int(0.20 * max(10, (bx2 - bx1 + 1)))
+        _fill_rect(out, bx1 - pad_x, by1 - int(0.60 * bh), bx2 + pad_x, by2 + int(0.35 * bh), 1)
+
+    # Hairline: top band above forehead landmarks.
+    forehead_pts = np.array([_lm_to_px(landmarks[i], w, h) for i in FOREHEAD_LM], dtype=np.int32)
+    fy = int(forehead_pts[:, 1].min())
+    hair_y = min(h, fy + int(0.16 * h))
+    _fill_rect(out, 0, 0, w, hair_y, 1)
+
+    # Beard-prone area: from below lips to near chin/jaw.
+    lips_pts = np.array([_lm_to_px(landmarks[i], w, h) for i in LIPS_LM], dtype=np.int32)
+    jaw_pts = np.array([_lm_to_px(landmarks[i], w, h) for i in JAW_LM], dtype=np.int32)
+    lx1, lx2 = int(lips_pts[:, 0].min()), int(lips_pts[:, 0].max())
+    ly2 = int(lips_pts[:, 1].max())
+    jx1, jx2 = int(jaw_pts[:, 0].min()), int(jaw_pts[:, 0].max())
+    jy2 = int(jaw_pts[:, 1].max())
+    beard_x1 = min(jx1, lx1 - int(0.22 * max(1, lx2 - lx1)))
+    beard_x2 = max(jx2, lx2 + int(0.22 * max(1, lx2 - lx1)))
+    beard_y1 = min(h, ly2 + int(0.02 * h))
+    beard_y2 = min(h, jy2 + int(0.06 * h))
+    _fill_rect(out, beard_x1, beard_y1, beard_x2, beard_y2, 1)
+
+    return out.astype(np.uint8)
 
 
 def apply_exclusion_mask_pil(
@@ -157,6 +215,7 @@ def extract_rois_with_boxes(face_img: Image.Image) -> Dict[str, Dict]:
     rois: Dict[str, Dict] = {}
     exclude_mouth = build_mouth_moustache_exclusion_mask(arr, lms)
     rois["exclude_mouth_moustache_mask"] = exclude_mouth
+    rois["exclude_visual_ignore_mask"] = build_visual_ignore_mask(arr, lms)
 
     # -----------------
     # Nose + T-zone ROIs
