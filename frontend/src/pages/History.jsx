@@ -468,6 +468,28 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
     const isBusy = simLoading && isOpen;
     const scanError = isOpen ? simError : "";
 
+    // Drag-slider state
+    const [sliderPos, setSliderPos] = useState(50); // 0-100 %
+    const containerRef = React.useRef(null);
+    const dragging = React.useRef(false);
+
+    const getPos = (clientX) => {
+      if (!containerRef.current) return sliderPos;
+      const rect = containerRef.current.getBoundingClientRect();
+      return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    };
+
+    const onMouseMove = (e) => {
+      if (!dragging.current) return;
+      setSliderPos(getPos(e.clientX));
+    };
+    const onTouchMove = (e) => {
+      if (!dragging.current) return;
+      setSliderPos(getPos(e.touches[0].clientX));
+    };
+    const stopDrag = () => { dragging.current = false; };
+    const startDrag = () => { dragging.current = true; };
+
     return (
       <div className="history-widget outcome-widget">
         <div className="history-widget-head">
@@ -495,34 +517,62 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
         {scanError && <p className="error-msg explain-status">{scanError}</p>}
 
         {isOpen && data && (
-          <div className="outcome-compare">
-            <div className="outcome-col">
-              <p className="outcome-label">Current</p>
-              <div className="explain-media-frame">
+          <>
+            {/* Before/after drag slider */}
+            <div
+              ref={containerRef}
+              className="outcome-slider-container"
+              onMouseMove={onMouseMove}
+              onMouseUp={stopDrag}
+              onMouseLeave={stopDrag}
+              onTouchMove={onTouchMove}
+              onTouchEnd={stopDrag}
+            >
+              {/* After (base layer — full width) */}
+              <img
+                src={`data:image/png;base64,${data.expected_png_base64}`}
+                alt="Expected outcome"
+                className="outcome-slider-img"
+                draggable={false}
+              />
+
+              {/* Before (overlay — clipped from the right) */}
+              <div
+                className="outcome-slider-before"
+                style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+              >
                 <img
                   src={`data:image/png;base64,${data.current_png_base64}`}
                   alt="Current face"
-                  className="explain-overlay-img"
+                  className="outcome-slider-img"
+                  draggable={false}
                 />
               </div>
-            </div>
-            <div className="outcome-col">
-              <p className="outcome-label">Expected</p>
-              <div className="explain-media-frame">
-                <img
-                  src={`data:image/png;base64,${data.expected_png_base64}`}
-                  alt="Expected outcome preview"
-                  className="explain-overlay-img"
+
+              {/* Divider line + handle */}
+              <div
+                className="outcome-slider-line"
+                style={{ left: `${sliderPos}%` }}
+              >
+                <div
+                  className="outcome-slider-handle"
+                  onMouseDown={startDrag}
+                  onTouchStart={startDrag}
                 />
               </div>
+
+              {/* Corner badges */}
+              <span className="outcome-badge outcome-badge-before">Before</span>
+              <span className="outcome-badge outcome-badge-after">After</span>
             </div>
+
             <p className="outcome-disclaimer">
               {data.disclaimer || "Visual simulation only. Not a diagnosis."}
               {typeof data?.meta?.mean_delta === "number"
                 ? ` • effect strength: ${(data.meta.mean_delta * 100).toFixed(1)}%`
                 : ""}
             </p>
-          </div>
+          </>
         )}
       </div>
     );

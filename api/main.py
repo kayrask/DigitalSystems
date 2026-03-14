@@ -18,6 +18,7 @@ from api.face_parse import FaceParser, apply_skin_mask
 from api.yolo_detector import YoloSkinDetector
 from datetime import datetime
 
+import cv2
 import numpy as np
 import os
 import io
@@ -477,169 +478,151 @@ def simulate_expected_outcome(
     strength: float = 0.85,
 ) -> tuple[Image.Image, dict]:
     """
-    Create a conservative cosmetic "expected outcome" simulation from predictions.
-    This is a visual projection only (non-diagnostic).
+    Realistic cosmetic outcome simulation using OpenCV retouching techniques.
+    - Acne/blackheads: cv2.inpaint (TELEA) fills blemishes with surrounding texture
+    - Redness: HSV colorspace — reduce saturation only in red-hue skin pixels
+    - Hyperpigmentation: LAB colorspace — lift L channel only (preserves chroma)
+    - Bags: cv2.bilateralFilter on eye ROI (edge-preserving smooth)
+    - Final: bilateral filter on skin area for natural smoothness
+    Visual projection only — not a diagnosis.
     """
     strength = float(np.clip(strength, 0.0, 1.0))
     img = face_img.convert("RGB")
-    arr = np.asarray(img).astype(np.float32) / 255.0
-    h, w = arr.shape[:2]
-    if h < 4 or w < 4:
+    img_np = np.array(img, dtype=np.uint8)          # HxWx3 RGB uint8
+    h, iw = img_np.shape[:2]
+    if h < 4 or iw < 4:
         return img, {"applied": False, "reason": "image_too_small"}
 
-    # Lightweight skin-like mask from HSV + luma constraints.
-    mx = arr.max(axis=2)
-    mn = arr.min(axis=2)
-    sat = (mx - mn) / np.maximum(mx, 1e-6)
-    lum = arr.mean(axis=2)
-    skin_mask = ((sat > 0.08) & (sat < 0.68) & (lum > 0.08) & (lum < 0.96)).astype(np.float32)
-    skin_mask = np.clip(
-        np.asarray(
-            Image.fromarray((skin_mask * 255).astype(np.uint8))
-            .filter(ImageFilter.GaussianBlur(radius=6))
-        ).astype(np.float32)
-        / 255.0,
-        0.0,
-        1.0,
-    )
+    # Work in BGR for all OpenCV ops; convert back at the end.
+    bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
-    acne_p_raw = float(np.clip(concerns.get("acne", 0.0), 0.0, 1.0))
-    red_p_raw = float(np.clip(concerns.get("redness", 0.0), 0.0, 1.0))
-    pig_p_raw = float(np.clip(concerns.get("hyperpigmentation", 0.0), 0.0, 1.0))
-    black_p_raw = float(np.clip(concerns.get("blackheads", 0.0), 0.0, 1.0))
-    bags_p_raw = float(np.clip(concerns.get("bags", 0.0), 0.0, 1.0))
+    # ── Skin mask (HSV + luma) used to restrict edits to skin regions ──────────
+    arr_f = img_np.astype(np.float32) / 255.0
+    mx = arr_f.max(axis=2)
+    mn = arr_f.min(axis=2)
+    sat_f = (mx - mn) / np.maximum(mx, 1e-6)
+    lum_f = arr_f.mean(axis=2)
+    skin_bool = (sat_f > 0.08) & (sat_f < 0.68) & (lum_f > 0.08) & (lum_f < 0.96)
+    skin_mask_u8 = (skin_bool.astype(np.uint8)) * 255
+    skin_mask_u8 = cv2.GaussianBlur(skin_mask_u8, (13, 13), 0)  # soft edges
+    skin_w = skin_mask_u8.astype(np.float32) / 255.0             # 0-1 float
 
-    # Non-linear boost so medium/low probabilities still produce visible (but bounded) preview changes.
-    acne_p = float(np.sqrt(acne_p_raw))
-    red_p = float(np.sqrt(red_p_raw))
-    pig_p = float(np.sqrt(pig_p_raw))
-    black_p = float(np.sqrt(black_p_raw))
-    bags_p = float(np.sqrt(bags_p_raw))
+    # ── Concern probabilities (sqrt boost for visibility) ───────────────────────
+    def _p(key):
+        return float(np.sqrt(np.clip(concerns.get(key, 0.0), 0.0, 1.0)))
+    def _p_raw(key):
+        return float(np.clip(concerns.get(key, 0.0), 0.0, 1.0))
 
-    out = arr.copy()
+    acne_p_raw   = _p_raw("acne");       acne_p   = _p("acne")
+    red_p_raw    = _p_raw("redness");    red_p    = _p("redness")
+    pig_p_raw    = _p_raw("hyperpigmentation"); pig_p = _p("hyperpigmentation")
+    black_p_raw  = _p_raw("blackheads"); black_p  = _p("blackheads")
+    bags_p_raw   = _p_raw("bags");       bags_p   = _p("bags")
 
-    # Build localized acne/texture mask from YOLO boxes (or high-frequency fallback).
-    acne_mask = np.zeros((h, w), dtype=np.float32)
-    if isinstance(yolo_boxes, list):
-        for b in yolo_boxes:
-            cls = int(b.get("cls", -1))
-            # Acne / blackheads / pores / whiteheads
-            if cls not in {0, 1, 4, 8}:
-                continue
-            conf = float(b.get("conf", 0.0))
-            if conf < 0.08:
-                continue
-            x1, y1, x2, y2 = [int(round(v)) for v in (b.get("box") or [0, 0, 0, 0])]
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w, x2), min(h, y2)
-            if x2 <= x1 or y2 <= y1:
-                continue
-            acne_mask[y1:y2, x1:x2] = np.maximum(acne_mask[y1:y2, x1:x2], min(1.0, 0.35 + conf))
-    if acne_mask.max() > 0:
-        acne_mask = np.asarray(
-            Image.fromarray((acne_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=7))
-        ).astype(np.float32) / 255.0
-    else:
-        # Fallback: estimate blemish-like high-frequency texture on skin only.
-        blur_luma = np.asarray(
-            Image.fromarray((lum * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.3))
-        ).astype(np.float32) / 255.0
-        highfreq = np.abs(lum - blur_luma)
-        acne_mask = _smoothstep(highfreq, 0.02, 0.10) * skin_mask
-        acne_mask = np.asarray(
-            Image.fromarray((acne_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=4))
-        ).astype(np.float32) / 255.0
+    texture_level = float(np.clip((0.62 * acne_p + 0.45 * black_p) * strength, 0.0, 0.40))
+    red_level     = float(np.clip(red_p * strength * 0.46, 0.0, 0.34))
+    pig_level     = float(np.clip(pig_p * strength * 0.50, 0.0, 0.32))
+    bags_level    = float(np.clip(bags_p * strength * 0.32, 0.0, 0.22))
 
-    # 1) Acne/texture improvement: targeted smoothing + tone evening only in acne mask.
-    texture_level = np.clip((0.62 * acne_p + 0.45 * black_p) * strength, 0.0, 0.40)
     if (acne_p_raw > 0.08 or black_p_raw > 0.08) and texture_level < 0.08 * strength:
         texture_level = 0.08 * strength
+    if red_p_raw  > 0.08 and red_level   < 0.06 * strength: red_level   = 0.06 * strength
+    if pig_p_raw  > 0.08 and pig_level   < 0.06 * strength: pig_level   = 0.06 * strength
+    if bags_p_raw > 0.08 and bags_level  < 0.05 * strength: bags_level  = 0.05 * strength
+
+    # ── 1) Acne / blackheads — cv2.inpaint (TELEA healing) ─────────────────────
     if texture_level > 1e-4:
-        blur_rgb = np.asarray(
-            Image.fromarray((arr * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.15))
-        ).astype(np.float32) / 255.0
-        texture_mask = np.clip(acne_mask * skin_mask, 0.0, 1.0)
-        # Keep detail by using low blend and no global skin blur.
-        smooth_w = (0.55 * texture_level) * texture_mask[..., None]
-        out = out * (1.0 - smooth_w) + blur_rgb * smooth_w
-        # Slightly even local contrast without washing out.
-        local_luma = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
-        out = out * (1.0 - 0.16 * texture_level * texture_mask[..., None]) + (
-            local_luma[..., None] * (0.16 * texture_level * texture_mask[..., None])
-        )
+        inpaint_mask = np.zeros((h, iw), dtype=np.uint8)
+        has_yolo_boxes = False
+        if isinstance(yolo_boxes, list):
+            for b in yolo_boxes:
+                cls = int(b.get("cls", -1))
+                if cls not in {0, 1, 4, 8}:   # acne / blackheads / pores / whiteheads
+                    continue
+                conf = float(b.get("conf", 0.0))
+                if conf < 0.08:
+                    continue
+                x1, y1, x2, y2 = [int(round(v)) for v in (b.get("box") or [0, 0, 0, 0])]
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(iw, x2), min(h, y2)
+                if x2 > x1 and y2 > y1:
+                    inpaint_mask[y1:y2, x1:x2] = 255
+                    has_yolo_boxes = True
 
-    # 2) Redness correction: reduce local saturation/red dominance without hue-casting.
-    red_level = np.clip(red_p * strength * 0.46, 0.0, 0.34)
-    if red_p_raw > 0.08 and red_level < 0.06 * strength:
-        red_level = 0.06 * strength
+        if has_yolo_boxes:
+            # Dilate slightly so inpainting fully covers each blemish edge.
+            kernel = np.ones((7, 7), np.uint8)
+            inpaint_mask = cv2.dilate(inpaint_mask, kernel, iterations=1)
+            # Restrict inpainting to skin only — don't touch eyes/lips.
+            inpaint_mask = cv2.bitwise_and(inpaint_mask, skin_mask_u8)
+            # Blend: full inpaint at strength=1.0, partial at lower strengths.
+            healed = cv2.inpaint(bgr, inpaint_mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
+            blend_alpha = np.where(inpaint_mask > 0, texture_level, 0.0)[..., None]
+            bgr = (bgr.astype(np.float32) * (1.0 - blend_alpha) +
+                   healed.astype(np.float32) * blend_alpha).astype(np.uint8)
+        else:
+            # Fallback (no YOLO): gentle bilateral smooth on skin only.
+            smooth = cv2.bilateralFilter(bgr, d=9, sigmaColor=50, sigmaSpace=50)
+            alpha = (skin_w * texture_level * 0.6)[..., None]
+            bgr = (bgr.astype(np.float32) * (1.0 - alpha) +
+                   smooth.astype(np.float32) * alpha).astype(np.uint8)
+
+    # ── 2) Redness — HSV: reduce S channel in red-hue skin pixels ───────────────
     if red_level > 1e-4:
-        r = out[..., 0]
-        g = out[..., 1]
-        b = out[..., 2]
-        excess_red = np.clip(r - (0.52 * g + 0.48 * b), 0.0, 1.0)
-        red_mask = _smoothstep(excess_red, 0.02, 0.22) * skin_mask
-        # Pull toward local luminance to avoid green/purple color shift.
-        local_luma = 0.299 * r + 0.587 * g + 0.114 * b
-        sat_reduce = (0.62 * red_level) * red_mask
-        out = out * (1.0 - sat_reduce[..., None]) + local_luma[..., None] * sat_reduce[..., None]
-        # Slight brightness lift for "post-treatment" look.
-        out = np.clip(out + (0.08 * red_level * red_mask[..., None]), 0.0, 1.0)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+        # OpenCV H range: 0-180. Red hue wraps: 0-15 and 165-180.
+        h_ch = hsv[:, :, 0]
+        red_px = ((h_ch <= 15) | (h_ch >= 165)) & (hsv[:, :, 1] > 40) & skin_bool
+        # Reduce saturation — pull toward neutral without green/purple cast.
+        hsv[:, :, 1][red_px] = np.clip(hsv[:, :, 1][red_px] * (1.0 - red_level * 0.65), 0, 255)
+        # Slight brightness lift in those pixels for "calmed skin" look.
+        hsv[:, :, 2][red_px] = np.clip(hsv[:, :, 2][red_px] * (1.0 + red_level * 0.08), 0, 255)
+        bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
-    # 3) Hyperpigmentation correction: lift darker areas while preserving chroma.
-    pig_level = np.clip(pig_p * strength * 0.50, 0.0, 0.32)
-    if pig_p_raw > 0.08 and pig_level < 0.06 * strength:
-        pig_level = 0.06 * strength
+    # ── 3) Hyperpigmentation — LAB: lift L channel only in dark skin areas ──────
     if pig_level > 1e-4:
-        y = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
-        dark_mask = _smoothstep(0.74 - y, 0.04, 0.33) * skin_mask
-        dark_mask = np.asarray(
-            Image.fromarray((dark_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=5))
-        ).astype(np.float32) / 255.0
-        # Lighten toward white in a bounded way to keep skin tone realistic.
-        lift = (pig_level * 0.55) * dark_mask[..., None]
-        out = np.clip(out + lift * (1.0 - out), 0.0, 1.0)
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
+        l_ch = lab[:, :, 0]   # 0-255 in OpenCV LAB
+        # Target uneven dark patches on skin (L < ~140 relative to skin baseline).
+        dark_px = (l_ch < 140) & skin_bool
+        # Smooth the selection to avoid hard edges.
+        dark_f = dark_px.astype(np.float32)
+        dark_f = cv2.GaussianBlur(dark_f, (11, 11), 0)
+        lift_amount = pig_level * 0.55 * 60.0  # max ~33 L units at full strength
+        lab[:, :, 0] = np.clip(l_ch + dark_f * lift_amount, 0, 255)
+        bgr = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
 
-    # 4) Under-eye softening based on ROI boxes when available (luma-only style).
-    bags_level = np.clip(bags_p * strength * 0.32, 0.0, 0.22)
-    if bags_p_raw > 0.08 and bags_level < 0.05 * strength:
-        bags_level = 0.05 * strength
+    # ── 4) Under-eye bags — bilateral filter on eye ROI ─────────────────────────
     if bags_level > 1e-4:
         try:
             rois = extract_rois_with_boxes(img)
         except Exception:
             rois = {}
-        eye_mask = np.zeros((h, w), dtype=np.float32)
         for k in ("under_eye_left", "under_eye_right", "under_eye"):
             roi = rois.get(k)
             if not roi:
                 continue
-            x1, y1, x2, y2 = [int(v) for v in roi["box"]]
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w, x2), min(h, y2)
-            if x2 > x1 and y2 > y1:
-                eye_mask[y1:y2, x1:x2] = 1.0
-        if eye_mask.max() > 0:
-            eye_mask = np.asarray(
-                Image.fromarray((eye_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=10))
-            ).astype(np.float32) / 255.0
-            # Gentle luma lift, avoid blur-heavy "beauty filter" look.
-            local_luma = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
-            w = (0.35 * bags_level) * eye_mask[..., None]
-            out = out * (1.0 - w) + local_luma[..., None] * w
-            out = np.clip(out + (0.08 * bags_level * eye_mask[..., None]), 0.0, 1.0)
+            ex1, ey1, ex2, ey2 = [int(v) for v in roi["box"]]
+            ex1, ey1 = max(0, ex1), max(0, ey1)
+            ex2, ey2 = min(iw, ex2), min(h, ey2)
+            if ex2 <= ex1 or ey2 <= ey1:
+                continue
+            patch = bgr[ey1:ey2, ex1:ex2]
+            # Bilateral preserves the fine lines/lashes; just softens dark circles.
+            smooth_patch = cv2.bilateralFilter(patch, d=9, sigmaColor=60, sigmaSpace=60)
+            alpha = float(bags_level) * 0.6
+            bgr[ey1:ey2, ex1:ex2] = cv2.addWeighted(patch, 1.0 - alpha, smooth_patch, alpha, 0)
 
-    # Ensure a minimum visible difference for practical UX if concerns are present.
-    mean_delta = float(np.mean(np.abs(out - arr)))
-    concern_max = float(max(acne_p_raw, red_p_raw, pig_p_raw, black_p_raw, bags_p_raw))
-    if concern_max >= 0.12 and mean_delta < 0.012:
-        # No additional blur fallback: use tiny skin-only tonal lift to keep realism.
-        out = np.clip(out + (0.010 * strength * skin_mask[..., None]), 0.0, 1.0)
-        mean_delta = float(np.mean(np.abs(out - arr)))
+    # ── Final pass: light bilateral on skin for natural smoothness ───────────────
+    smooth_final = cv2.bilateralFilter(bgr, d=7, sigmaColor=35, sigmaSpace=35)
+    final_alpha = (skin_w * 0.30)[..., None]   # max 30% blend — keeps skin texture
+    bgr = (bgr.astype(np.float32) * (1.0 - final_alpha) +
+           smooth_final.astype(np.float32) * final_alpha).astype(np.uint8)
 
-    # Final detail-preserving sharpen so preview stays crisp, not "filtered".
-    sim = Image.fromarray((np.clip(out, 0.0, 1.0) * 255).astype(np.uint8)).filter(
-        ImageFilter.UnsharpMask(radius=1.0, percent=80, threshold=3)
-    )
+    # ── Convert back to PIL RGB and compute delta ────────────────────────────────
+    out_np = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    mean_delta = float(np.mean(np.abs(out_np.astype(np.float32) - img_np.astype(np.float32))) / 255.0)
+    sim = Image.fromarray(out_np)
     meta = {
         "applied": True,
         "strength": strength,
