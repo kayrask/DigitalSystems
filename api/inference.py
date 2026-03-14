@@ -39,6 +39,7 @@ class SkinModel:
         self.tone_conf_min = 0.8
 
         tone_thr_candidates = [
+            os.path.join("models", "per_class_thresholds_by_tone_tuned_v2.json"),
             os.path.join("models", "per_class_thresholds_by_tone_tuned.json"),
             os.path.join("models", "per_class_thresholds_by_tone.json"),
         ]

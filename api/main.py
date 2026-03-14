@@ -21,6 +21,7 @@ import io
 import json
 import base64
 
+import hashlib
 import bcrypt
 from dotenv import load_dotenv
 import mysql.connector
@@ -702,7 +703,7 @@ app.add_middleware(
 # NOTE: these relative paths assume you run uvicorn from PROJECT ROOT.
 # If you run from inside /api folder, you may need to adjust paths.
 
-MODEL_PATH = "models/best_multilabel.pt"
+MODEL_PATH = "models/best_multilabel_v2.pt"
 THRESHOLDS_PATH = "models/per_class_thresholds.json"
 
 SKIN_TYPE_MODEL_PATH = "models/skin_type_resnet18.pt"

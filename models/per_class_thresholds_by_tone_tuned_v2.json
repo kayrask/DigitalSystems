@@ -1,0 +1,116 @@
+{
+  "tone_conf_min": 0.8,
+  "labels": [
+    "acne",
+    "bags",
+    "blackheads",
+    "hyperpigmentation",
+    "redness"
+  ],
+  "tone_classes": [
+    "Black",
+    "Brown",
+    "White"
+  ],
+  "label_datasets": {
+    "acne": [
+      "a_fullface",
+      "b_fullface",
+      "patches"
+    ],
+    "bags": [
+      "a_fullface"
+    ],
+    "redness": [
+      "a_fullface"
+    ],
+    "blackheads": [
+      "patches"
+    ],
+    "hyperpigmentation": [
+      "patches"
+    ]
+  },
+  "thresholds": {
+    "default": {
+      "acne": 0.18,
+      "bags": 0.27,
+      "blackheads": 0.1,
+      "hyperpigmentation": 0.41,
+      "redness": 0.12
+    },
+    "Black": {
+      "acne": 0.1,
+      "bags": 0.27,
+      "blackheads": 0.45,
+      "hyperpigmentation": 0.41,
+      "redness": 0.12
+    },
+    "Brown": {
+      "acne": 0.18,
+      "bags": 0.27,
+      "blackheads": 0.1,
+      "hyperpigmentation": 0.41,
+      "redness": 0.12
+    },
+    "White": {
+      "acne": 0.18,
+      "bags": 0.27,
+      "blackheads": 0.1,
+      "hyperpigmentation": 0.41,
+      "redness": 0.12
+    }
+  },
+  "counts": {
+    "group_counts": {
+      "default": 171,
+      "Black": 66,
+      "Brown": 0,
+      "White": 6
+    },
+    "pos_counts": {
+      "default": {
+        "acne": 47,
+        "bags": 6,
+        "blackheads": 36,
+        "hyperpigmentation": 36,
+        "redness": 3
+      },
+      "Black": {
+        "acne": 19,
+        "bags": 3,
+        "blackheads": 14,
+        "hyperpigmentation": 13,
+        "redness": 0
+      },
+      "Brown": {
+        "acne": 0,
+        "bags": 0,
+        "blackheads": 0,
+        "hyperpigmentation": 0,
+        "redness": 0
+      },
+      "White": {
+        "acne": 1,
+        "bags": 3,
+        "blackheads": 1,
+        "hyperpigmentation": 0,
+        "redness": 0
+      }
+    },
+    "n_per_label_default": {
+      "acne": 128,
+      "bags": 12,
+      "blackheads": 107,
+      "hyperpigmentation": 107,
+      "redness": 12
+    },
+    "pos_per_label_default": {
+      "acne": 47,
+      "bags": 6,
+      "blackheads": 36,
+      "hyperpigmentation": 36,
+      "redness": 3
+    }
+  }
+}
