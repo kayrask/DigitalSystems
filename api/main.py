@@ -271,7 +271,7 @@ def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> 
         }
         uncertainty[label] = {
             "threshold": thr,
-            "floor": float(min_positive_prob.get(label, 0.5)),
+            "floor": thr,
             "margin": margin,
             "suppressed": suppressed,
             "reasons": reasons,
