@@ -1,5 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from api.inference import SkinModel, SkinTypeModel, SkinToneModel, LABELS
 from PIL import Image, ImageOps, ImageDraw, ImageFilter
 from pydantic import BaseModel
@@ -31,6 +34,11 @@ from mysql.connector import Error, IntegrityError
 load_dotenv()
 
 app = FastAPI()
+
+# Rate limiter — unauthenticated callers: 10/min; authenticated (user_id present): 120/min
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Coordinate conversion helpers ---
 def clamp_box(box, w, h):
@@ -178,6 +186,13 @@ def _add_face_pose_quality_checks(quality: dict, face_meta: dict, full_img: Imag
         if center_offset > 0.22:
             out["reasons"].append(f"face_off_center (offset={center_offset:.3f})")
 
+        # Face angle check: a turned face has a narrower bounding box (width/height < 0.55)
+        aspect = fw / max(fh, 1.0)
+        out["metrics"]["face_aspect_ratio"] = round(aspect, 3)
+        out["thresholds"]["face_aspect_ratio_min"] = 0.55
+        if aspect < 0.55:
+            out["reasons"].append(f"extreme_angle (face_aspect={aspect:.2f})")
+
     out["passed"] = len(out["reasons"]) == 0
     return out
 
@@ -219,29 +234,16 @@ def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> 
     """
     gated = {}
     uncertainty = {}
-    # Conservative floors for "present" decisions to avoid low-threshold false positives.
-    min_positive_prob = {
-        "acne": 0.55,
-        "bags": 0.50,
-        "blackheads": 0.45,
-        "hyperpigmentation": 0.55,
-        "redness": 0.55,
-    }
-
-    acne_recall_floor = 0.58
-
     for label, v in results.items():
         prob = float(v["probability"])
         thr = float(thr_map.get(label, 0.5))
         pred = int(v["prediction"])
 
-        # Rescue high-confidence acne misses caused by aggressive tone thresholds.
-        if label == "acne" and pred == 0 and prob >= acne_recall_floor:
-            pred = 1
-
         margin = abs(prob - thr)
         near_threshold = margin < 0.06
-        below_floor = pred == 1 and prob < float(min_positive_prob.get(label, 0.5))
+        # Use thr_map as the single source of truth — eliminates the previous
+        # contradiction between hardcoded floors (e.g. 0.55) and JSON thresholds (e.g. 0.05).
+        below_floor = pred == 1 and prob < thr
         # keep this rule only for localized labels; diffuse labels should not be over-suppressed here
         weak_positive = label in LOCAL and pred == 1 and prob < max(0.45, thr + 0.04)
         yolo_disagree = label in LOCAL and pred == 1 and det_count.get(label, 0) == 0 and prob < 0.65
@@ -667,10 +669,13 @@ def on_startup():
         print(f"[startup] Model warm-up failed (non-fatal): {e}")
 
 
-# Allow all origins for now (you can restrict later)
+# CORS — defaults to localhost dev ports; override via CORS_ORIGINS env var for production.
+_cors_origins = os.getenv(
+    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -716,8 +721,29 @@ def root():
     return {"message": "Skin condition API is running."}
 
 
+def _predict_rate_key(request: Request) -> str:
+    """Admins (role='admin' in DB) bypass the rate limit by returning a fixed key.
+    Regular callers are keyed by IP address."""
+    uid = request.query_params.get("user_id") or ""
+    if uid:
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT role FROM users WHERE id=%s", (int(uid),))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row and str(row[0]).lower() == "admin":
+                return "admin-unlimited"
+        except Exception:
+            pass
+    return get_remote_address(request)
+
+
 @app.post("/predict")
+@limiter.limit("10/minute", key_func=_predict_rate_key)
 async def predict(
+    request: Request,
     file: UploadFile = File(...),
     user_id: int | None = Form(None),
 ):

@@ -121,12 +121,12 @@ The file `.env` is in `.gitignore`. Never hardcode credentials.
 
 ### Critical Known Issues (Do Not Regress)
 - Quality gate must run on **`face_img_raw`** (raw crop), NOT the oval-masked image
-- `tone_conf_min` default in `inference.py` is 1.0 — overridden by JSON to 0.8; default should be fixed to 0.8
-- The acne threshold in JSON (0.05) is overridden by gating floor (0.55) — these two layers need consolidation
-- Shadow score gates at two points: quality gate (`> 0.35`, line ~809 of main.py) and hyperpigmentation overlay suppression (`> 0.22`, line ~1671) — both wired ✓
-- No rate limiting on `/predict` — easy to abuse
-- Passwords are SHA-256 — must migrate to bcrypt before any production deployment
-- CORS is `allow_origins=["*"]` — must be restricted for production
+- Shadow score gates at two points: quality gate (`> 0.35`) and hyperpigmentation overlay suppression (`> 0.22`) — both wired ✓
+- tone_conf_min default is 0.8 in inference.py ✓
+- Threshold gating uses thr_map as single source of truth (no hardcoded floors) ✓
+- Rate limiting: 10/min per IP on `/predict`; admins bypass via DB role check ✓
+- Passwords use bcrypt (SHA-256 fallback for legacy accounts only) ✓
+- CORS restricted to `CORS_ORIGINS` env var (defaults to localhost:3000) ✓
 
 ### File Structure
 ```

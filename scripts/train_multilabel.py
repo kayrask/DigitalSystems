@@ -89,13 +89,18 @@ def get_transforms(img_size=224):
     return train_tf, eval_tf
 
 
-def build_model(num_classes, freeze_backbone=False):
-    m = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-    in_features = m.fc.in_features
-    m.fc = nn.Linear(in_features, num_classes)
+def build_model(num_classes, arch="resnet18", freeze_backbone=False):
+    if arch == "efficientnet_b3":
+        m = models.efficientnet_b3(weights=models.EfficientNet_B3_Weights.DEFAULT)
+        m.classifier[1] = nn.Linear(m.classifier[1].in_features, num_classes)
+        head_prefix = "classifier"
+    else:  # default: resnet18
+        m = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        m.fc = nn.Linear(m.fc.in_features, num_classes)
+        head_prefix = "fc"
     if freeze_backbone:
         for n, p in m.named_parameters():
-            if not n.startswith("fc."):
+            if not n.startswith(head_prefix):
                 p.requires_grad = False
     return m
 
@@ -117,6 +122,8 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out_dir", default="models")
     ap.add_argument("--freeze_backbone", action="store_true")
+    ap.add_argument("--arch", default="resnet18", choices=["resnet18", "efficientnet_b3"],
+                    help="Model architecture (default: resnet18)")
     args = ap.parse_args()
 
     set_seed(args.seed)
@@ -163,7 +170,7 @@ def main():
     test_loader  = DataLoader(test_ds,  batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     # Model / loss / opt
-    model = build_model(num_classes=len(LABELS), freeze_backbone=args.freeze_backbone).to(device)
+    model = build_model(num_classes=len(LABELS), arch=args.arch, freeze_backbone=args.freeze_backbone).to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     from torch.optim.lr_scheduler import ReduceLROnPlateau

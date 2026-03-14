@@ -68,9 +68,17 @@ class SkinModel:
 
     def _build_model(self, num_classes):
         import torchvision.models as models
-        m = models.resnet18(weights=None)
-        in_f = m.fc.in_features
-        m.fc = nn.Linear(in_f, num_classes)
+        # Detect architecture from checkpoint metadata or model path name.
+        arch = getattr(self, "_arch", None)
+        if arch is None:
+            path = getattr(self, "model_path", "")
+            arch = "efficientnet_b3" if "effb3" in str(path).lower() else "resnet18"
+        if arch == "efficientnet_b3":
+            m = models.efficientnet_b3(weights=None)
+            m.classifier[1] = nn.Linear(m.classifier[1].in_features, num_classes)
+        else:
+            m = models.resnet18(weights=None)
+            m.fc = nn.Linear(m.fc.in_features, num_classes)
         return m
 
     def _resolve_thresholds(self, tone_group, tone_conf):
