@@ -4,7 +4,7 @@ import axios from "axios";
 import AppHeader from "../components/AppHeader";
 import "../App.css";
 
-const API_BASE = "http://127.0.0.1:8000";
+import API_BASE from "../config";
 
 const LABELS = [
   "ignore_moustache",

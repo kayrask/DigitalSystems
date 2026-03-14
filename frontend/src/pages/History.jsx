@@ -4,7 +4,7 @@ import "../App.css";
 import AppHeader from "../components/AppHeader";
 import axios from "axios";
 
-const API_BASE = "http://127.0.0.1:8000";
+import API_BASE from "../config";
 const UI_DETECT_THRESHOLD = 0.5;
 
 const prettyName = {

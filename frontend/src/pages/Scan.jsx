@@ -5,7 +5,7 @@ import Webcam from "react-webcam";
 import "../App.css";
 import AppHeader from "../components/AppHeader";
 
-const API_BASE = "http://127.0.0.1:8000";
+import API_BASE from "../config";
 const API_URL = `${API_BASE}/predict`;
 const UI_DETECT_THRESHOLD = 0.5;
 
