@@ -218,14 +218,14 @@ function Home() {
             </div>
             <div>
               <h5>Company</h5>
-              <Link to="/">About</Link>
-              <Link to="/">Research</Link>
-              <Link to="/">Contact</Link>
+              <span className="footer-link-placeholder">About</span>
+              <span className="footer-link-placeholder">Research</span>
+              <a href="mailto:support@aurai.app">Contact</a>
             </div>
             <div>
               <h5>Support</h5>
-              <Link to="/">Privacy</Link>
-              <Link to="/">Terms</Link>
+              <span className="footer-link-placeholder">Privacy</span>
+              <span className="footer-link-placeholder">Terms</span>
               <a href="mailto:support@aurai.app">support@aurai.app</a>
             </div>
           </div>

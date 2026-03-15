@@ -242,25 +242,23 @@ def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> 
 
         margin = abs(prob - thr)
         near_threshold = margin < 0.06
-        # Use thr_map as the single source of truth — eliminates the previous
-        # contradiction between hardcoded floors (e.g. 0.55) and JSON thresholds (e.g. 0.05).
-        below_floor = pred == 1 and prob < thr
-        # keep this rule only for localized labels; diffuse labels should not be over-suppressed here
-        weak_positive = label in LOCAL and pred == 1 and prob < max(0.45, thr + 0.04)
+        # thr_map is the single source of truth — pred==1 already means prob>=thr,
+        # so below_floor (prob<thr with pred==1) can never fire; removed.
+        # weak_positive: suppress localized labels that only barely cleared the threshold.
+        # Uses thr + 0.04 only — no hardcoded 0.45 floor that contradicted tuned thresholds.
+        weak_positive = label in LOCAL and pred == 1 and prob < thr + 0.04
         yolo_disagree = label in LOCAL and pred == 1 and det_count.get(label, 0) == 0 and prob < 0.65
 
         suppressed = False
         reasons = []
         if near_threshold:
             reasons.append("near_threshold")
-        if below_floor:
-            reasons.append("below_label_floor")
         if weak_positive:
             reasons.append("weak_positive")
         if yolo_disagree:
             reasons.append("yolo_disagree")
 
-        suppress_reasons = {"below_label_floor", "weak_positive", "yolo_disagree"}
+        suppress_reasons = {"weak_positive", "yolo_disagree"}
         if any(r in suppress_reasons for r in reasons):
             pred = 0
             suppressed = True

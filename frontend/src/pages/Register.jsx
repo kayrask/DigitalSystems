@@ -33,8 +33,13 @@ function Register() {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMsg("Password should be at least 6 characters.");
+    if (!email.includes("@") || !email.includes(".")) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setErrorMsg("Password must be at least 8 characters.");
       return;
     }
 
@@ -136,7 +141,7 @@ function Register() {
                 <input
                   type="password"
                   className="input-field"
-                  placeholder="Choose a password"
+                  placeholder="Min. 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

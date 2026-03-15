@@ -89,7 +89,7 @@ def update_me(user_id: int, data: ProfileUpdate):
             "name": current["name"],
             "email": current["email"],
             "phone": data.phone if data.phone is not None else current["phone"],
-            "age": current["age"], 
+            "age": data.age if data.age is not None else current["age"],
             "address": data.address if data.address is not None else current["address"],
             "allergies": data.allergies if data.allergies is not None else current["allergies"],
         }

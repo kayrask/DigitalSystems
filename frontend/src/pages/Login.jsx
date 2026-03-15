@@ -22,6 +22,10 @@ function Login() {
       setErrorMsg("Please fill in both email and password.");
       return;
     }
+    if (!email.includes("@") || !email.includes(".")) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
 
     try {
       const response = await axios.post(`${API_BASE}/login`, {

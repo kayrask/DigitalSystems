@@ -2338,12 +2338,15 @@ body {
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+  max-height: 420px;
 }
 
 .outcome-slider-img {
   display: block;
   width: 100%;
-  height: auto;
+  height: auto;        /* let the image set its own height — no cropping */
+  max-height: 420px;
+  object-fit: contain;
   pointer-events: none;
 }
 
@@ -2359,7 +2362,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* match base image scaling exactly */
 }
 
 .outcome-slider-line {
@@ -2371,13 +2374,14 @@ body {
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
   transform: translateX(-50%);
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .outcome-slider-handle {
   position: absolute;
+  /* Centre the 36px circle on the line both vertically and horizontally */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 36px;
   height: 36px;
   border-radius: 50%;
