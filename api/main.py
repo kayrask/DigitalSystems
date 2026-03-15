@@ -1172,7 +1172,7 @@ def explain(scan_id: int, target: str):
             explain_img = skin_only_img
             if exclusion_mask is not None and target in SENSITIVE_TARGETS:
                 explain_img = apply_exclusion_mask_pil(explain_img, exclusion_mask)
-            out = gradcam_overlay_base64(model, explain_img, target_label=target)
+            out = gradcam_overlay_base64(model, explain_img, target_label=target, skin_mask=skin_mask)
             face_overlay_canvas = base64png_to_pil_rgba(out["overlay_png_base64"]).resize(
                 face_img.size
             ).convert("RGBA")
@@ -1192,8 +1192,10 @@ def explain(scan_id: int, target: str):
                     exclude_crop = exclusion_mask[y1:y2, x1:x2]
                     roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
 
-                # Grad-CAM on ROI crop
-                out = gradcam_overlay_base64(model, roi_img, target_label=target)
+                # Grad-CAM on ROI crop — pass cropped skin mask so overlay
+                # stays on dermally-relevant pixels within the ROI
+                roi_skin_mask = skin_mask[y1:y2, x1:x2]
+                out = gradcam_overlay_base64(model, roi_img, target_label=target, skin_mask=roi_skin_mask)
                 roi_overlay = base64png_to_pil_rgba(out["overlay_png_base64"])
                 if exclude_crop is not None:
                     ov = np.array(roi_overlay)

@@ -16,12 +16,20 @@ import torch.nn.functional as F
 LABELS = ["acne", "bags", "blackheads", "hyperpigmentation", "redness"]
 
 
-def _make_red_overlay_rgba(cam: np.ndarray, strength: float = 0.85) -> Image.Image:
+def _make_red_overlay_rgba(
+    cam: np.ndarray,
+    strength: float = 0.85,
+    skin_mask: np.ndarray | None = None,
+) -> Image.Image:
     """Return a transparent (RGBA) red overlay.
 
     - Red channel is 255 everywhere.
     - Alpha channel is proportional to CAM intensity.
     - No blending with the input image.
+
+    If skin_mask (BiSeNet output, uint8 0/255) is provided it is used as the
+    focus mask so the overlay only appears on dermally-relevant pixels.
+    Falls back to a soft ellipse when no mask is provided.
 
     The returned PNG should be alpha-composited on top of a base image.
     """
@@ -37,12 +45,19 @@ def _make_red_overlay_rgba(cam: np.ndarray, strength: float = 0.85) -> Image.Ima
 
     h, w = cam.shape
 
-    # optional soft ellipse mask (keeps focus toward face region)
-    yy, xx = np.mgrid[0:h, 0:w]
-    cx, cy = w / 2.0, h / 2.0
-    rx, ry = w * 0.34, h * 0.44
-    ellipse = ((xx - cx) ** 2) / (rx ** 2) + ((yy - cy) ** 2) / (ry ** 2)
-    mask = (np.clip(1.0 - ellipse, 0.0, 1.0) ** 0.8).astype(np.float32)
+    if skin_mask is not None:
+        # Use BiSeNet skin mask: resize to CAM resolution and normalise to 0-1
+        mask_img = Image.fromarray(skin_mask.astype(np.uint8)).resize(
+            (w, h), Image.NEAREST
+        )
+        mask = (np.asarray(mask_img) / 255.0).astype(np.float32)
+    else:
+        # Fallback: soft ellipse mask (keeps focus toward face region)
+        yy, xx = np.mgrid[0:h, 0:w]
+        cx, cy = w / 2.0, h / 2.0
+        rx, ry = w * 0.34, h * 0.44
+        ellipse = ((xx - cx) ** 2) / (rx ** 2) + ((yy - cy) ** 2) / (ry ** 2)
+        mask = (np.clip(1.0 - ellipse, 0.0, 1.0) ** 0.8).astype(np.float32)
 
     # additional visibility boost
     cam = cam ** 0.5
@@ -60,6 +75,7 @@ def gradcam_overlay_base64(
     skin_model,
     image: Image.Image,
     target_label: str,
+    skin_mask: np.ndarray | None = None,
 ) -> Dict[str, Any]:
     """Generate a Grad-CAM overlay and return it as base64 PNG (RGBA overlay)."""
 
@@ -116,7 +132,7 @@ def gradcam_overlay_base64(
 
         cam_np = cam_up.detach().cpu().numpy()
 
-        overlay = _make_red_overlay_rgba(cam_np, strength=0.85)
+        overlay = _make_red_overlay_rgba(cam_np, strength=0.85, skin_mask=skin_mask)
 
         buf = io.BytesIO()
         overlay.save(buf, format="PNG")
