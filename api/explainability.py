@@ -52,10 +52,11 @@ def _make_red_overlay_rgba(
         )
         mask = (np.asarray(mask_img) / 255.0).astype(np.float32)
     else:
-        # Fallback: soft ellipse mask (keeps focus toward face region)
+        # Fallback: soft ellipse — centre shifted UP so it stays on the face,
+        # not the neck/chest area that the 35 % margin crop includes.
         yy, xx = np.mgrid[0:h, 0:w]
-        cx, cy = w / 2.0, h / 2.0
-        rx, ry = w * 0.34, h * 0.44
+        cx, cy = w / 2.0, h * 0.38   # 38 % down from top (forehead–cheek level)
+        rx, ry = w * 0.34, h * 0.32  # shorter ry keeps it off jaw / neck
         ellipse = ((xx - cx) ** 2) / (rx ** 2) + ((yy - cy) ** 2) / (ry ** 2)
         mask = (np.clip(1.0 - ellipse, 0.0, 1.0) ** 0.8).astype(np.float32)
 

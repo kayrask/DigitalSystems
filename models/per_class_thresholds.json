@@ -1,7 +1,7 @@
 {
-  "acne": 0.1,
-  "bags": 0.95,
-  "blackheads": 0.1,
-  "hyperpigmentation": 0.9,
-  "redness": 0.6
+  "acne": 0.04,
+  "bags": 0.20,
+  "blackheads": 0.04,
+  "hyperpigmentation": 0.20,
+  "redness": 0.04
 }

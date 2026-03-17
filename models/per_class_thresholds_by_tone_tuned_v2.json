@@ -33,32 +33,32 @@
   },
   "thresholds": {
     "default": {
-      "acne": 0.18,
-      "bags": 0.27,
-      "blackheads": 0.1,
-      "hyperpigmentation": 0.41,
-      "redness": 0.12
+      "acne": 0.04,
+      "bags": 0.20,
+      "blackheads": 0.04,
+      "hyperpigmentation": 0.20,
+      "redness": 0.04
     },
     "Black": {
-      "acne": 0.1,
-      "bags": 0.27,
-      "blackheads": 0.45,
-      "hyperpigmentation": 0.41,
-      "redness": 0.12
+      "acne": 0.04,
+      "bags": 0.20,
+      "blackheads": 0.04,
+      "hyperpigmentation": 0.20,
+      "redness": 0.04
     },
     "Brown": {
-      "acne": 0.18,
-      "bags": 0.27,
-      "blackheads": 0.1,
-      "hyperpigmentation": 0.41,
-      "redness": 0.12
+      "acne": 0.04,
+      "bags": 0.20,
+      "blackheads": 0.04,
+      "hyperpigmentation": 0.20,
+      "redness": 0.04
     },
     "White": {
-      "acne": 0.18,
-      "bags": 0.27,
-      "blackheads": 0.1,
-      "hyperpigmentation": 0.41,
-      "redness": 0.12
+      "acne": 0.04,
+      "bags": 0.20,
+      "blackheads": 0.04,
+      "hyperpigmentation": 0.20,
+      "redness": 0.04
     }
   },
   "counts": {

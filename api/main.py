@@ -517,16 +517,16 @@ def simulate_expected_outcome(
     black_p_raw  = _p_raw("blackheads"); black_p  = _p("blackheads")
     bags_p_raw   = _p_raw("bags");       bags_p   = _p("bags")
 
-    texture_level = float(np.clip((0.62 * acne_p + 0.45 * black_p) * strength, 0.0, 0.40))
-    red_level     = float(np.clip(red_p * strength * 0.46, 0.0, 0.34))
-    pig_level     = float(np.clip(pig_p * strength * 0.50, 0.0, 0.32))
-    bags_level    = float(np.clip(bags_p * strength * 0.32, 0.0, 0.22))
+    texture_level = float(np.clip((0.90 * acne_p + 0.70 * black_p) * strength, 0.0, 0.70))
+    red_level     = float(np.clip(red_p * strength * 0.80, 0.0, 0.65))
+    pig_level     = float(np.clip(pig_p * strength * 0.80, 0.0, 0.65))
+    bags_level    = float(np.clip(bags_p * strength * 0.65, 0.0, 0.50))
 
-    if (acne_p_raw > 0.08 or black_p_raw > 0.08) and texture_level < 0.08 * strength:
-        texture_level = 0.08 * strength
-    if red_p_raw  > 0.08 and red_level   < 0.06 * strength: red_level   = 0.06 * strength
-    if pig_p_raw  > 0.08 and pig_level   < 0.06 * strength: pig_level   = 0.06 * strength
-    if bags_p_raw > 0.08 and bags_level  < 0.05 * strength: bags_level  = 0.05 * strength
+    if (acne_p_raw > 0.08 or black_p_raw > 0.08) and texture_level < 0.15 * strength:
+        texture_level = 0.15 * strength
+    if red_p_raw  > 0.08 and red_level   < 0.12 * strength: red_level   = 0.12 * strength
+    if pig_p_raw  > 0.08 and pig_level   < 0.12 * strength: pig_level   = 0.12 * strength
+    if bags_p_raw > 0.08 and bags_level  < 0.10 * strength: bags_level  = 0.10 * strength
 
     # ── 1) Acne / blackheads — cv2.inpaint (TELEA healing) ─────────────────────
     if texture_level > 1e-4:
@@ -551,17 +551,18 @@ def simulate_expected_outcome(
             # Dilate slightly so inpainting fully covers each blemish edge.
             kernel = np.ones((7, 7), np.uint8)
             inpaint_mask = cv2.dilate(inpaint_mask, kernel, iterations=1)
-            # Restrict inpainting to skin only — don't touch eyes/lips.
-            inpaint_mask = cv2.bitwise_and(inpaint_mask, skin_mask_u8)
-            # Blend: full inpaint at strength=1.0, partial at lower strengths.
-            healed = cv2.inpaint(bgr, inpaint_mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
-            blend_alpha = np.where(inpaint_mask > 0, texture_level, 0.0)[..., None]
+            # Do NOT restrict by skin_mask here — acne/blackhead pixels are often
+            # darker or more saturated than normal skin and get incorrectly masked out.
+            # YOLO already localised the blemishes accurately, so trust it.
+            healed = cv2.inpaint(bgr, inpaint_mask, inpaintRadius=7, flags=cv2.INPAINT_TELEA)
+            # Full blend over detected blemish regions for clear visible change.
+            blend_alpha = np.where(inpaint_mask > 0, min(texture_level + 0.3, 1.0), 0.0)[..., None]
             bgr = (bgr.astype(np.float32) * (1.0 - blend_alpha) +
                    healed.astype(np.float32) * blend_alpha).astype(np.uint8)
         else:
             # Fallback (no YOLO): gentle bilateral smooth on skin only.
-            smooth = cv2.bilateralFilter(bgr, d=9, sigmaColor=50, sigmaSpace=50)
-            alpha = (skin_w * texture_level * 0.6)[..., None]
+            smooth = cv2.bilateralFilter(bgr, d=15, sigmaColor=80, sigmaSpace=80)
+            alpha = (skin_w * texture_level * 0.85)[..., None]
             bgr = (bgr.astype(np.float32) * (1.0 - alpha) +
                    smooth.astype(np.float32) * alpha).astype(np.uint8)
 
@@ -572,9 +573,9 @@ def simulate_expected_outcome(
         h_ch = hsv[:, :, 0]
         red_px = ((h_ch <= 15) | (h_ch >= 165)) & (hsv[:, :, 1] > 40) & skin_bool
         # Reduce saturation — pull toward neutral without green/purple cast.
-        hsv[:, :, 1][red_px] = np.clip(hsv[:, :, 1][red_px] * (1.0 - red_level * 0.65), 0, 255)
-        # Slight brightness lift in those pixels for "calmed skin" look.
-        hsv[:, :, 2][red_px] = np.clip(hsv[:, :, 2][red_px] * (1.0 + red_level * 0.08), 0, 255)
+        hsv[:, :, 1][red_px] = np.clip(hsv[:, :, 1][red_px] * (1.0 - red_level * 0.85), 0, 255)
+        # Brightness lift in those pixels for "calmed skin" look.
+        hsv[:, :, 2][red_px] = np.clip(hsv[:, :, 2][red_px] * (1.0 + red_level * 0.15), 0, 255)
         bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
     # ── 3) Hyperpigmentation — LAB: lift L channel only in dark skin areas ──────
@@ -586,7 +587,7 @@ def simulate_expected_outcome(
         # Smooth the selection to avoid hard edges.
         dark_f = dark_px.astype(np.float32)
         dark_f = cv2.GaussianBlur(dark_f, (11, 11), 0)
-        lift_amount = pig_level * 0.55 * 60.0  # max ~33 L units at full strength
+        lift_amount = pig_level * 0.80 * 90.0  # max ~58 L units at full strength
         lab[:, :, 0] = np.clip(l_ch + dark_f * lift_amount, 0, 255)
         bgr = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
 
@@ -608,7 +609,7 @@ def simulate_expected_outcome(
             patch = bgr[ey1:ey2, ex1:ex2]
             # Bilateral preserves the fine lines/lashes; just softens dark circles.
             smooth_patch = cv2.bilateralFilter(patch, d=9, sigmaColor=60, sigmaSpace=60)
-            alpha = float(bags_level) * 0.6
+            alpha = float(bags_level) * 0.85
             bgr[ey1:ey2, ex1:ex2] = cv2.addWeighted(patch, 1.0 - alpha, smooth_patch, alpha, 0)
 
     # ── Final pass: light bilateral on skin for natural smoothness ───────────────
@@ -666,7 +667,7 @@ app.add_middleware(
 # NOTE: these relative paths assume you run uvicorn from PROJECT ROOT.
 # If you run from inside /api folder, you may need to adjust paths.
 
-MODEL_PATH = "models/best_multilabel_v2.pt"
+MODEL_PATH = "models/best_multilabel_for_eval.pt"
 THRESHOLDS_PATH = "models/per_class_thresholds.json"
 
 SKIN_TYPE_MODEL_PATH = "models/skin_type_resnet18.pt"
@@ -878,14 +879,13 @@ async def predict(
         }
 
     # --- YOLO detection on face crop (for sanity + localization) ---
-    # conf=0.20: 0.10 was too noisy, producing false detections at 10% confidence
     try:
         yolo_boxes = yolo_detector.predict(
             face_img_raw,
-            conf=0.20,
+            conf=0.05,
             iou=0.45,
             imgsz=512,
-            max_det=100,
+            max_det=200,
         )
     except Exception as e:
         print("YOLO predict failed:", e)
@@ -895,7 +895,7 @@ async def predict(
     det_count = {k: 0 for k in results.keys()}
     for b in yolo_boxes:
         for lbl, ids in YOLO_CLASS_IDS.items():
-            if lbl in det_count and b["cls"] in ids and b["conf"] >= 0.20:
+            if lbl in det_count and b["cls"] in ids and b["conf"] >= 0.05:
                 det_count[lbl] += 1
 
     # Fusion: when YOLO finds nothing, reduce (not zero) the CNN probability.
@@ -1016,11 +1016,24 @@ def simulate_outcome(scan_id: int, user_id: int, strength: float = 0.9):
             "hyperpigmentation": _get_concern_prob(results_obj, "hyperpigmentation"),
         }
 
+        # Re-run YOLO with a lower confidence threshold for simulation purposes.
+        # The diagnostic threshold is stricter; here we want to catch more
+        # blemishes for the visual inpainting effect even if below clinical confidence.
         yolo_boxes = []
         try:
-            yolo_boxes = (((results_obj or {}).get("yolo") or {}).get("boxes")) or []
+            yolo_boxes = yolo_detector.predict(
+                face_img,
+                conf=0.05,
+                iou=0.45,
+                imgsz=512,
+                max_det=200,
+            )
         except Exception:
-            yolo_boxes = []
+            # Fall back to stored boxes if YOLO re-run fails
+            try:
+                yolo_boxes = (((results_obj or {}).get("yolo") or {}).get("boxes")) or []
+            except Exception:
+                yolo_boxes = []
 
         sim_img, sim_meta = simulate_expected_outcome(
             face_img=face_img,
@@ -1096,18 +1109,45 @@ def explain(scan_id: int, target: str):
         # Always derive face crop from the full image + bbox to avoid oval-masked artifacts.
         face_img = full_img.crop((bx, by, bx + bw, by + bh)).convert("RGB")
 
+        # Compute BiSeNet skin mask early — constrains both YOLO and Grad-CAM to skin pixels
+        skin_mask = face_parser.skin_mask(face_img)
+        # If BiSeNet fallback (all-255), treat as no valid mask so ellipse is used for Grad-CAM
+        bisenet_valid = bool(np.any(skin_mask == 0))
+        gradcam_skin_mask = skin_mask if bisenet_valid else None
+        skin_only_img = apply_skin_mask(face_img, skin_mask)
+
         # If we have YOLO, use boxes for localized issues instead of Grad-CAM
         LOCALIZED = {"acne", "blackheads", "bags"}
         if target in LOCALIZED:
+            # Run YOLO on original face crop; post-filter by skin mask center point
             yolo_boxes = yolo_detector.predict(
                 face_img,
-                conf=0.20,
+                conf=0.05,
                 iou=0.45,
                 imgsz=512,
-                max_det=100,
+                max_det=200,
             )
             ids = YOLO_CLASS_IDS.get(target, set())
             filtered = [b for b in yolo_boxes if b["cls"] in ids]
+
+            # Filter 1: skin mask (when BiSeNet loaded)
+            if bisenet_valid:
+                sk_h, sk_w = skin_mask.shape
+                def _in_skin(box):
+                    cx = int(np.clip((box[0] + box[2]) / 2, 0, sk_w - 1))
+                    cy = int(np.clip((box[1] + box[3]) / 2, 0, sk_h - 1))
+                    return skin_mask[cy, cx] > 0
+                filtered = [b for b in filtered if _in_skin(b["box"])]
+
+            # Filter 2: face oval heuristic (always applied — catches background even if BiSeNet failed)
+            face_w_px, face_h_px = face_img.size
+            oval_cx, oval_cy = face_w_px / 2.0, face_h_px * 0.40
+            oval_rx, oval_ry  = face_w_px * 0.42, face_h_px * 0.42
+            def _in_oval(box):
+                cx = (box[0] + box[2]) / 2.0
+                cy = (box[1] + box[3]) / 2.0
+                return ((cx - oval_cx) / oval_rx) ** 2 + ((cy - oval_cy) / oval_ry) ** 2 <= 1.0
+            filtered = [b for b in filtered if _in_oval(b["box"])]
             
             # Draw boxes on face image and return as base64
             face_with_boxes = draw_boxes(
@@ -1154,9 +1194,6 @@ def explain(scan_id: int, target: str):
                 "detection_count": len(detections),
             }
 
-        skin_mask = face_parser.skin_mask(face_img)
-        skin_only_img = apply_skin_mask(face_img, skin_mask)
-
         # 1) ROI-aware Grad-CAM (localized) or full-face Grad-CAM (diffuse)
         rois = extract_rois_with_boxes(face_img)
         exclusion_mask = rois.get("exclude_mouth_moustache_mask")
@@ -1172,7 +1209,7 @@ def explain(scan_id: int, target: str):
             explain_img = skin_only_img
             if exclusion_mask is not None and target in SENSITIVE_TARGETS:
                 explain_img = apply_exclusion_mask_pil(explain_img, exclusion_mask)
-            out = gradcam_overlay_base64(model, explain_img, target_label=target, skin_mask=skin_mask)
+            out = gradcam_overlay_base64(model, explain_img, target_label=target, skin_mask=gradcam_skin_mask)
             face_overlay_canvas = base64png_to_pil_rgba(out["overlay_png_base64"]).resize(
                 face_img.size
             ).convert("RGBA")
@@ -1194,7 +1231,7 @@ def explain(scan_id: int, target: str):
 
                 # Grad-CAM on ROI crop — pass cropped skin mask so overlay
                 # stays on dermally-relevant pixels within the ROI
-                roi_skin_mask = skin_mask[y1:y2, x1:x2]
+                roi_skin_mask = gradcam_skin_mask[y1:y2, x1:x2] if gradcam_skin_mask is not None else None
                 out = gradcam_overlay_base64(model, roi_img, target_label=target, skin_mask=roi_skin_mask)
                 roi_overlay = base64png_to_pil_rgba(out["overlay_png_base64"])
                 if exclude_crop is not None:
