@@ -2830,3 +2830,170 @@ select {
   flex: 1;
   justify-content: center;
 }
+
+/* ============================================================
+   MOBILE RESPONSIVE — 768px and below
+   ============================================================ */
+@media (max-width: 768px) {
+
+  /* Header */
+  .app-header {
+    padding: 10px 14px;
+    gap: 12px;
+  }
+
+  .nav-links {
+    gap: 6px;
+  }
+
+  .nav-links a,
+  .nav-links button {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Scan page — stack the 3 cards vertically */
+  .scan-main {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+    margin-top: 8px;
+  }
+
+  /* History — stack panels */
+  .history-main {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  /* General app-main grid */
+  .app-main {
+    grid-template-columns: 1fr;
+    padding: 0 10px 32px;
+  }
+
+  /* Hero section — stack left/right */
+  .home-hero-card {
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    padding: 28px 20px 24px;
+    gap: 28px;
+  }
+
+  .home-hero-left {
+    text-align: center;
+  }
+
+  .home-hero-left h2 {
+    font-size: clamp(26px, 7vw, 38px);
+  }
+
+  .home-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .home-hero-actions a {
+    text-align: center;
+  }
+
+  .home-hero-stats {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .home-hero-badges {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .home-hero-right {
+    display: none; /* hide phone mockup on small screens */
+  }
+
+  /* Feature grid — 2 columns on tablet, 1 on phone */
+  .home-feature-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* Flow grid — stack vertically */
+  .home-flow-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .home-section-wrap {
+    padding: 24px 16px;
+  }
+
+  .home-section-head h3 {
+    font-size: 20px;
+  }
+
+  /* CTA strip */
+  .home-cta-strip {
+    padding: 40px 20px;
+  }
+
+  .home-cta-strip h3 {
+    font-size: 22px;
+  }
+
+  /* Footer */
+  .home-footer-top {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .home-footer-links {
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  /* Auth cards */
+  .auth-card {
+    margin: 20px 14px;
+    padding: 28px 20px;
+  }
+
+  /* Result cards on scan page */
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Webcam / camera area */
+  .camera-frame {
+    max-height: 280px;
+  }
+
+  /* Outcome slider */
+  .outcome-slider-container {
+    max-height: 260px;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+  .home-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero-left h2 {
+    font-size: 24px;
+  }
+
+  .brand h1 {
+    font-size: 15px;
+  }
+
+  .scan-card {
+    padding: 14px 14px 16px;
+  }
+
+  .primary-btn {
+    font-size: 14px;
+    padding: 12px 20px;
+  }
+}

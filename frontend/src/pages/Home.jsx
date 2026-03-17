@@ -47,7 +47,7 @@ function Home() {
     };
   }, [userId]);
 
-  const ctaLabel = user ? "✨ Start a new scan" : "✨ Get started";
+  const ctaLabel = user ? "Start a new scan" : "Get started — it's free";
   const ctaLink = user ? "/scan" : "/login";
 
   return (
@@ -57,15 +57,15 @@ function Home() {
       <main className="home-main">
         <section className="home-hero-card">
           <div className="home-hero-left reveal reveal-1">
-            <p className="home-hero-kicker reveal reveal-1">AI-Powered Skin Analysis</p>
+            <p className="home-hero-kicker reveal reveal-1">Skin analysis, personalised for you</p>
             <h2 className="reveal reveal-1">
-              Discover Your Perfect
+              Know exactly what
               <br />
-              Skincare Routine
+              your skin needs
             </h2>
             <p className="home-hero-text reveal reveal-2">
-              Get personalized insights based on one clear selfie. AURAI combines
-              model scoring, region-aware localization, and routine guidance in one flow.
+              Take one selfie and get a personalised breakdown of your skin in seconds —
+              acne, redness, hyperpigmentation and more, with a routine built around your results.
             </p>
 
             <div className="home-hero-actions reveal reveal-3">
@@ -84,20 +84,20 @@ function Home() {
 
             <div className="home-hero-stats reveal reveal-4">
               <div className="home-hero-stat">
-                <strong>5</strong><span>Core concerns tracked</span>
+                <strong>5</strong><span>Skin conditions</span>
               </div>
               <div className="home-hero-stat">
-                <strong>30+</strong><span>Regression checks</span>
+                <strong>2.5s</strong><span>Scan time</span>
               </div>
               <div className="home-hero-stat">
-                <strong>2.5s</strong><span>Average scan time</span>
+                <strong>100%</strong><span>Free to use</span>
               </div>
             </div>
 
             <div className="home-hero-badges reveal reveal-4">
-              <span>Free analysis</span>
-              <span>Personalized output</span>
-              <span>Explainable results</span>
+              <span>No sign-up fee</span>
+              <span>Personalised routine</span>
+              <span>Progress tracking</span>
             </div>
           </div>
 
@@ -138,29 +138,29 @@ function Home() {
         <section className="home-neutral-band reveal reveal-2">
           <section className="home-section-wrap">
             <div className="home-section-head">
-              <h3>Why choose AURAI?</h3>
-              <p>Accurate analysis with personalized recommendations and progress tracking.</p>
+              <h3>Why AURAI?</h3>
+              <p>Real analysis, honest results, and a routine that actually fits your skin.</p>
             </div>
             <div className="home-feature-grid">
               <article className="home-feature-card">
                 <div className="home-feature-icon">◎</div>
-                <h4>AI Skin Analysis</h4>
-                <p>Computer-vision models estimate concern visibility in seconds.</p>
+                <h4>Instant skin analysis</h4>
+                <p>Upload a photo and get a clear breakdown of acne, redness, blackheads and more in seconds.</p>
               </article>
               <article className="home-feature-card">
                 <div className="home-feature-icon">✦</div>
-                <h4>Personalized Routine</h4>
-                <p>Suggestions adapt to skin profile, confidence, and risk signals.</p>
+                <h4>Your personalised routine</h4>
+                <p>Step-by-step skincare suggestions tailored to what your skin actually needs right now.</p>
               </article>
               <article className="home-feature-card">
                 <div className="home-feature-icon">▢</div>
-                <h4>Product Guidance</h4>
-                <p>Structured outputs connect model evidence to practical next steps.</p>
+                <h4>Clear next steps</h4>
+                <p>Know exactly what to use, when to use it, and why — no guesswork.</p>
               </article>
               <article className="home-feature-card">
                 <div className="home-feature-icon">↗</div>
-                <h4>Track Progress</h4>
-                <p>Review previous scans and monitor trends over time.</p>
+                <h4>Track your progress</h4>
+                <p>Save your scans and watch how your skin changes over time.</p>
               </article>
             </div>
           </section>
@@ -168,33 +168,33 @@ function Home() {
           <section className="home-section-wrap reveal reveal-3">
             <div className="home-section-head">
               <h3>How it works</h3>
-              <p>Three quick steps from upload to personalized guidance.</p>
+              <p>Three steps from photo to personalised routine — takes under a minute.</p>
             </div>
             <div className="home-flow-grid">
               <article className="home-flow-card">
                 <span className="home-flow-number">1</span>
                 <h4>Take a photo</h4>
-                <p>Use upload or live camera with automatic quality checks.</p>
+                <p>Upload a selfie or use your camera. We check the lighting and clarity automatically.</p>
               </article>
               <article className="home-flow-card">
                 <span className="home-flow-number">2</span>
-                <h4>AI analysis</h4>
-                <p>Classifier + ROI logic + detector fusion produce structured outputs.</p>
+                <h4>We analyse your skin</h4>
+                <p>Our AI scans for five conditions and highlights exactly where concerns appear on your face.</p>
               </article>
               <article className="home-flow-card">
                 <span className="home-flow-number">3</span>
-                <h4>Get recommendations</h4>
-                <p>Receive personalized routine suggestions and track progress.</p>
+                <h4>Get your routine</h4>
+                <p>Receive a personalised skincare routine based on your results, saved for next time.</p>
               </article>
             </div>
           </section>
         </section>
 
         <section className="home-cta-strip reveal reveal-4">
-          <h3>Ready to transform your skin workflow?</h3>
-          <p>Join users getting structured skin analysis and actionable guidance.</p>
+          <h3>Your skin deserves better</h3>
+          <p>Take a free scan and find out exactly what your skin needs today.</p>
           <Link to={ctaLink} className="home-cta-strip-btn">
-            Start Your Free Scan
+            Start your free scan
           </Link>
         </section>
       </main>
@@ -204,8 +204,8 @@ function Home() {
           <div className="home-footer-brand">
             <h4>AURAI</h4>
             <p>
-              AI-powered skin analysis and personalized routine support built for
-              clear, trackable results.
+              Personalised skin analysis in seconds — built to help you actually
+              understand and take care of your skin.
             </p>
           </div>
 
