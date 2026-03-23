@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
-
 import API_BASE from "../config";
 
 function Register() {
@@ -12,14 +11,9 @@ function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // optional
   const [address, setAddress] = useState("");
-
-  // allergies flow
-  const [hasAllergies, setHasAllergies] = useState(null); // null | "yes" | "no"
+  const [hasAllergies, setHasAllergies] = useState(null);
   const [allergies, setAllergies] = useState("");
-
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -32,18 +26,14 @@ function Register() {
       setErrorMsg("Please fill in all required fields.");
       return;
     }
-
     if (!email.includes("@") || !email.includes(".")) {
       setErrorMsg("Please enter a valid email address.");
       return;
     }
-
     if (password.length < 8) {
       setErrorMsg("Password must be at least 8 characters.");
       return;
     }
-
-    // If user chose "yes" but left allergies empty, warn (optional rule)
     if (hasAllergies === "yes" && !allergies.trim()) {
       setErrorMsg("Please list your allergies or select 'No'.");
       return;
@@ -54,22 +44,17 @@ function Register() {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        address: address.trim() ? address.trim() : null, // optional
+        address: address.trim() ? address.trim() : null,
         allergies: hasAllergies === "yes" ? allergies.trim() : null,
       });
 
-      // default: session login after register (matches your remember-me behavior)
       sessionStorage.setItem("auraiUser", JSON.stringify(response.data));
       localStorage.removeItem("auraiUser");
 
       setSuccessMsg("Account created! Redirecting…");
       setTimeout(() => navigate("/", { replace: true }), 900);
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setErrorMsg(err.response.data.detail);
-      } else {
-        setErrorMsg("Registration failed. Please try again.");
-      }
+      setErrorMsg(err.response?.data?.detail || "Registration failed. Please try again.");
     }
   };
 
@@ -77,13 +62,13 @@ function Register() {
     setHasAllergies(choice);
     setErrorMsg("");
     setSuccessMsg("");
-    if (choice === "no") setAllergies(""); // clear if they say no
+    if (choice === "no") setAllergies("");
   };
 
   return (
     <div className="app-root">
       <header className="app-header">
-        <div className="brand brand-left" onClick={() => navigate("/") }>
+        <div className="brand brand-left" onClick={() => navigate("/")}>
           <div className="brand-icon">🌬️</div>
           <div>
             <h1>AURAI</h1>
@@ -114,91 +99,49 @@ function Register() {
             <form className="auth-form" onSubmit={handleSubmit}>
               <label className="input-label">
                 Name *
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
+                <input type="text" className="input-field" placeholder="Your name"
+                  value={name} onChange={(e) => setName(e.target.value)} required />
               </label>
 
               <label className="input-label">
                 Email *
-                <input
-                  type="email"
-                  className="input-field"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
+                <input type="email" className="input-field" placeholder="you@example.com"
+                  value={email} onChange={(e) => setEmail(e.target.value)} required />
               </label>
 
               <label className="input-label">
                 Password *
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder="Min. 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <input type="password" className="input-field" placeholder="Min. 8 characters"
+                  value={password} onChange={(e) => setPassword(e.target.value)} required />
               </label>
 
               <label className="input-label">
                 Address (optional)
-                <textarea
-                  className="input-field"
-                  placeholder="Street, city, postcode (optional)"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  rows={3}
-                  style={{ resize: "vertical" }}
-                />
+                <textarea className="input-field" placeholder="Street, city, postcode (optional)"
+                  value={address} onChange={(e) => setAddress(e.target.value)}
+                  rows={3} style={{ resize: "vertical" }} />
               </label>
 
               <div className="input-label" style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                  Do you have any allergies?
-                </div>
-
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Do you have any allergies?</div>
                 <div className="auth-toggle-row">
-                  <button
-                    type="button"
+                  <button type="button"
                     className={hasAllergies === "yes" ? "mode-btn active" : "mode-btn"}
-                    onClick={() => selectAllergies("yes")}
-                  >
-                    Yes
-                  </button>
-
-                  <button
-                    type="button"
+                    onClick={() => selectAllergies("yes")}>Yes</button>
+                  <button type="button"
                     className={hasAllergies === "no" ? "mode-btn active" : "mode-btn"}
-                    onClick={() => selectAllergies("no")}
-                  >
-                    No
-                  </button>
+                    onClick={() => selectAllergies("no")}>No</button>
                 </div>
-
                 {hasAllergies === "yes" && (
-                  <textarea
-                    className="input-field"
+                  <textarea className="input-field"
                     placeholder="List your allergies (e.g. fragrance, nuts, niacinamide...)"
-                    value={allergies}
-                    onChange={(e) => setAllergies(e.target.value)}
-                    rows={3}
-                    style={{ marginTop: 10, resize: "vertical" }}
-                  />
+                    value={allergies} onChange={(e) => setAllergies(e.target.value)}
+                    rows={3} style={{ marginTop: 10, resize: "vertical" }} />
                 )}
               </div>
 
               <div className="auth-actions">
-                <button type="submit" className="primary-btn">
-                  Register
-                </button>
+                <button type="submit" className="primary-btn">Register</button>
                 <Link to="/login" className="secondary-link">
                   Already have an account? Log in
                 </Link>

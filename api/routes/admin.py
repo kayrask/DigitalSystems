@@ -34,6 +34,11 @@ class AdminPromoteRequest(BaseModel):
     code: str
 
 
+class RoleUpdateRequest(BaseModel):
+    requester_id: int
+    role: str  # "admin" or "user"
+
+
 @router.get("/admin/scan-image/{scan_id}")
 def get_admin_scan_image(scan_id: int, user_id: int, kind: str = "face_raw"):
     """
@@ -325,6 +330,37 @@ def save_admin_annotations(data: AnnotationSave):
 
     except Error as e:
         print("MySQL error in /admin/annotations (POST):", e)
+        if conn is not None and conn.is_connected():
+            conn.close()
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@router.patch("/admin/users/{target_user_id}/role")
+def update_user_role(target_user_id: int, data: RoleUpdateRequest):
+    """Allow an admin to promote or demote another user's role."""
+    conn = None
+    if data.role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+    if target_user_id == data.requester_id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    try:
+        if not is_admin_user(data.requester_id):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM users WHERE id=%s LIMIT 1", (target_user_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
+        cur.execute("UPDATE users SET role=%s WHERE id=%s", (data.role, target_user_id))
+        conn.commit()
+        cur.close()
+        if conn.is_connected():
+            conn.close()
+        return {"ok": True, "user_id": target_user_id, "role": data.role}
+    except HTTPException:
+        raise
+    except Error as e:
+        print("MySQL error in PATCH /admin/users/{id}/role:", e)
         if conn is not None and conn.is_connected():
             conn.close()
         raise HTTPException(status_code=500, detail="Database error")

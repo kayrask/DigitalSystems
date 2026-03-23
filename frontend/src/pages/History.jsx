@@ -675,7 +675,7 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
                               <span className="history-id">Scan #{scan.id}</span>
                             </div>
                             <span className="history-toggle-tag">
-                              <span>{isOpen ? "Hide details" : "View details"}</span>
+                              <span>{isOpen ? "Tap to hide details" : "Tap to view details"}</span>
                               <span className={"history-toggle-chevron" + (isOpen ? " is-open" : "")}>
                                 ▾
                               </span>
@@ -701,9 +701,20 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
                             </div>
                           )}
 
-                          <span className="history-meta-note">
-                            Tap to {isOpen ? "collapse" : "expand"} details
-                          </span>
+                          {scan.results?.routine?.steps && (
+                            <button
+                              className="history-routine-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/routine/${scan.id}`);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                              </svg>
+                              View Routine
+                            </button>
+                          )}
                         </div>
 
                         <div className="history-col-signals">

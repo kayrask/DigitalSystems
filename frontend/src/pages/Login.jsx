@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
-
 import API_BASE from "../config";
 
 function Login() {
@@ -12,7 +11,6 @@ function Login() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,37 +26,27 @@ function Login() {
     }
 
     try {
-      const response = await axios.post(`${API_BASE}/login`, {
-        email,
-        password,
-      });
-
+      const response = await axios.post(`${API_BASE}/login`, { email, password });
       const user = response.data;
 
       if (rememberMe) {
         localStorage.setItem("auraiUser", JSON.stringify(user));
         sessionStorage.removeItem("auraiUser");
-      } 
-        else {
+      } else {
         sessionStorage.setItem("auraiUser", JSON.stringify(user));
         localStorage.removeItem("auraiUser");
       }
 
       navigate("/", { replace: true });
-
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setErrorMsg(err.response.data.detail);
-      } else {
-        setErrorMsg("Login failed. Please try again.");
-      }
+      setErrorMsg(err.response?.data?.detail || "Login failed. Please try again.");
     }
   };
 
   return (
     <div className="app-root">
       <header className="app-header">
-        <div className="brand brand-left" onClick={() => navigate("/") }>
+        <div className="brand brand-left" onClick={() => navigate("/")}>
           <div className="brand-icon">🌬️</div>
           <div>
             <h1>AURAI</h1>
@@ -89,39 +77,24 @@ function Login() {
             <form className="auth-form" onSubmit={handleSubmit}>
               <label className="input-label">
                 Email
-                <input
-                  type="email"
-                  className="input-field"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <input type="email" className="input-field" placeholder="you@example.com"
+                  value={email} onChange={(e) => setEmail(e.target.value)} />
               </label>
 
               <label className="input-label">
                 Password
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <input type="password" className="input-field" placeholder="••••••••"
+                  value={password} onChange={(e) => setPassword(e.target.value)} />
               </label>
 
               <label className="auth-remember">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                />
+                <input type="checkbox" checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)} />
                 <span>Remember me on this device</span>
               </label>
 
               <div className="auth-actions">
-                <button type="submit" className="primary-btn">
-                  Log in
-                </button>
+                <button type="submit" className="primary-btn">Log in</button>
                 <Link to="/register" className="secondary-link">
                   Don&apos;t have an account? Register
                 </Link>
