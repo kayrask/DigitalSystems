@@ -247,7 +247,7 @@ def _apply_uncertainty_gating(results: dict, thr_map: dict, det_count: dict) -> 
         # weak_positive: suppress localized labels that only barely cleared the threshold.
         # Uses thr + 0.04 only — no hardcoded 0.45 floor that contradicted tuned thresholds.
         weak_positive = label in LOCAL and pred == 1 and prob < thr + 0.04
-        yolo_disagree = label in LOCAL and pred == 1 and det_count.get(label, 0) == 0 and prob < 0.65
+        yolo_disagree = label in LOCAL and pred == 1 and det_count.get(label, 0) == 0 and prob < thr + 0.10
 
         suppressed = False
         reasons = []
