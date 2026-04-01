@@ -13,9 +13,10 @@ class SkinModel:
     def __init__(self, model_path, thresholds_path=None, device=None):
         self.device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
 
-        # Model definition (same as training)
-        self.model = self._build_model(num_classes=len(LABELS))
+        # Load checkpoint first to detect architecture
         ckpt = torch.load(model_path, map_location=self.device)
+        self._arch = ckpt.get("arch", "resnet18")
+        self.model = self._build_model(num_classes=len(LABELS))
 
         if "model" in ckpt:
             self.model.load_state_dict(ckpt["model"])

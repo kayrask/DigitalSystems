@@ -53,12 +53,19 @@ LABEL_DATASETS = {
 def load_multilabel_model(ckpt_path: str, device: torch.device):
     ckpt = torch.load(ckpt_path, map_location=device)
 
-    m = models.resnet18(weights=None)
-    m.fc = nn.Linear(m.fc.in_features, len(LABELS))
+    # Auto-detect architecture from checkpoint (falls back to resnet18)
+    arch = ckpt.get("arch", "resnet18")
+    if arch == "efficientnet_b3":
+        m = models.efficientnet_b3(weights=None)
+        m.classifier[1] = nn.Linear(m.classifier[1].in_features, len(LABELS))
+    else:
+        m = models.resnet18(weights=None)
+        m.fc = nn.Linear(m.fc.in_features, len(LABELS))
 
     state = ckpt["state_dict"] if "state_dict" in ckpt else ckpt["model"]
     m.load_state_dict(state)
     m.to(device).eval()
+    print(f"Loaded multilabel model: arch={arch}")
 
     tf = transforms.Compose([
         transforms.Resize((224, 224)),
