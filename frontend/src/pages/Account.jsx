@@ -37,7 +37,7 @@ function Account() {
 
       <main className="app-main">
         <section className="card dashboard-card">
-          <h2>Welcome back, {user.name || "AURAI user"} 👋</h2>
+          <h2>Welcome back, {user.name || "NYMIRA user"} 👋</h2>
           <p className="hint">
             From here you can start new face scans, review your previous results,
             and see your orders once payments are integrated.

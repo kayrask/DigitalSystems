@@ -5,7 +5,6 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from api.inference import SkinModel, SkinTypeModel, SkinToneModel, LABELS
 from PIL import Image, ImageOps, ImageDraw, ImageFilter
-from pydantic import BaseModel
 from api.recommender import recommend_routine
 from typing import Optional, List
 from api.quality_gate import assess_image_quality, QualityConfig
@@ -24,6 +23,7 @@ import os
 import io
 import json
 import base64
+import hashlib
 
 import hashlib
 import bcrypt
@@ -413,9 +413,6 @@ def is_admin_user(user_id: Optional[int]) -> bool:
         if conn is not None and getattr(conn, "is_connected", lambda: False)():
             conn.close()
         return False
-    age: Optional[int] = None
-    address: Optional[str] = None
-    allergies: Optional[str] = None
 
 UPLOAD_DIR = "uploads"
 
@@ -639,6 +636,8 @@ def simulate_expected_outcome(
         "mean_delta": mean_delta,
     }
     return sim, meta
+
+
 
 
 @app.on_event("startup")

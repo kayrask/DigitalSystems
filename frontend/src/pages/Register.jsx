@@ -1,9 +1,10 @@
 // src/pages/Register.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
 import API_BASE from "../config";
+import AppHeader from "../components/AppHeader";
 
 function Register() {
   const navigate = useNavigate();
@@ -16,6 +17,18 @@ function Register() {
   const [allergies, setAllergies] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  useEffect(() => {
+    function tryInit() {
+      if (typeof window.initLiquidEther === 'function') {
+        window.initLiquidEther('liquid-hero-bg');
+      } else {
+        setTimeout(tryInit, 50);
+      }
+    }
+    tryInit();
+    return () => { if (window._leDestroy) window._leDestroy(); };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,37 +79,21 @@ function Register() {
   };
 
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <div className="brand brand-left" onClick={() => navigate("/")}>
-          <div className="brand-icon">🌬️</div>
-          <div>
-            <h1>AURAI</h1>
-            <p>AI-powered facial skin analysis</p>
+    <div className="app-root auth-page">
+      <div id="liquid-hero-bg" className="home-hero-fluid" />
+      <AppHeader />
+
+      <main className="auth-wrap">
+        <section className="auth-card-v2 auth-card-wide">
+          <div className="auth-card-head">
+            <p className="home-hero-kicker">Create your account</p>
+            <h2 className="auth-title-v2">
+              Your skin journey <span className="home-hero-gradient">starts here.</span>
+            </h2>
+            <p className="auth-sub-v2">Registration takes less than a minute.</p>
           </div>
-        </div>
-      </header>
 
-      <main className="app-main auth-main">
-        <section className="card auth-card auth-shell">
-          <aside className="auth-aside">
-            <p className="auth-aside-kicker">Create your account</p>
-            <h2>Set up your personal AURAI space</h2>
-            <p className="auth-aside-copy">
-              Your profile stores scan history and preferences to provide consistent, trackable results.
-            </p>
-            <div className="auth-aside-points">
-              <span>Secure account-based history</span>
-              <span>Faster repeat scan flow</span>
-              <span>Personalized routine context</span>
-            </div>
-          </aside>
-
-          <div className="auth-panel">
-            <h3>Create an account</h3>
-            <p className="hint">Registration takes less than a minute.</p>
-
-            <form className="auth-form" onSubmit={handleSubmit}>
+          <form className="auth-form" onSubmit={handleSubmit}>
               <label className="input-label">
                 Name *
                 <input type="text" className="input-field" placeholder="Your name"
@@ -150,7 +147,6 @@ function Register() {
               {errorMsg && <p className="error-msg">{errorMsg}</p>}
               {successMsg && <p className="success-msg">{successMsg}</p>}
             </form>
-          </div>
         </section>
       </main>
 

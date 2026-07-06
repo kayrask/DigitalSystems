@@ -71,70 +71,39 @@ function Home() {
   const ctaLink = user ? "/scan" : "/login";
 
   return (
-    <div className="app-root">
+    <div className="app-root home-page">
+      {/* Fixed full-page fluid canvas — sits behind everything */}
+      <div id="liquid-hero-bg" className="home-hero-fluid" />
+
       <AppHeader />
 
       {/* Hero lives OUTSIDE home-main so it gets full width natively */}
       <section className="home-hero-card">
         <div id="liquid-hero-bg" className="home-hero-fluid" />
-        <div className="home-hero-inner">
-          <div className="home-hero-left">
-            <p className="home-hero-kicker">Skin analysis, personalised for you</p>
-            <h2>
-              Know exactly what
-              <br />
-              your skin needs
-            </h2>
-            <p className="home-hero-text">
-              Take one selfie and get a personalised breakdown of your skin in seconds —
-              acne, redness, hyperpigmentation and more, with a routine built around your results.
-            </p>
-
-            <div className="home-hero-actions">
-              <Link to={ctaLink} className="primary-btn home-main-cta">{ctaLabel}</Link>
-              {isAdmin && (
-                <Link to="/admin/users" className="ghost-btn home-secondary-cta">Admin panel</Link>
-              )}
-              {user && hasPreviousScans && (
-                <Link to="/history" className="ghost-btn home-secondary-cta">View recent scans</Link>
-              )}
-            </div>
-
-            <div className="home-hero-stats">
-              <div className="home-hero-stat"><strong>5</strong><span>Skin conditions</span></div>
-              <div className="home-hero-stat"><strong>2.5s</strong><span>Scan time</span></div>
-              <div className="home-hero-stat"><strong>100%</strong><span>Free to use</span></div>
-            </div>
-
-            <div className="home-hero-badges">
-              <span>No sign-up fee</span>
-              <span>Personalised routine</span>
-              <span>Progress tracking</span>
-            </div>
+        <div className="home-hero-center">
+          <p className="home-hero-kicker">Skin analysis, personalised for you</p>
+          <h2>
+            Your skin,<br />
+            <span className="home-hero-gradient">finally understood.</span>
+          </h2>
+          <p className="home-hero-text">
+            Upload a photo and get a full analysis — concerns, type, tone —
+            and a personalised routine made just for you. In seconds.
+          </p>
+          <div className="home-hero-actions">
+            <Link to={ctaLink} className="primary-btn home-main-cta">{ctaLabel}</Link>
+            {isAdmin && (
+              <Link to="/admin/users" className="ghost-btn home-secondary-cta">Admin panel</Link>
+            )}
+            {user && hasPreviousScans && (
+              <Link to="/history" className="ghost-btn home-secondary-cta">View recent scans</Link>
+            )}
           </div>
-
-          <div className="home-hero-right">
-            <div className="home-visual-stage">
-              <div className="home-portrait-backdrop" />
-              <div className="home-phone">
-                <div className="home-phone-notch" />
-                <div className="home-phone-screen">
-                  <div className="home-screen-hero">
-                    <p>Scan confidence</p>
-                    <strong>96.4%</strong>
-                  </div>
-                  <div className="home-mini-results">
-                    <div className="home-mini-row"><span>Acne</span><span>32%</span></div>
-                    <div className="home-mini-row"><span>Redness</span><span>11%</span></div>
-                    <div className="home-mini-row"><span>Blackheads</span><span>24%</span></div>
-                  </div>
-                  <div className="home-screen-footer">
-                    <span>Recent trend</span>
-                    <span className="home-trend-pill">Improving</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="home-hero-stats">
+            <div className="home-hero-stat"><strong>5</strong><span>Skin concerns detected</span></div>
+            <div className="home-hero-stat"><strong>95%</strong><span>Detection accuracy</span></div>
+            <div className="home-hero-stat"><strong>&lt;3s</strong><span>Full analysis time</span></div>
+            <div className="home-hero-stat"><strong>4</strong><span>Routine steps built</span></div>
           </div>
         </div>
       </section>
@@ -143,7 +112,7 @@ function Home() {
         <section className="home-neutral-band">
           <section className="home-section-wrap">
             <div className="home-section-head sr sr-up">
-              <h3>Why AURAI?</h3>
+              <h3>Why NYMIRA?</h3>
               <p>Real analysis, honest results, and a routine that actually fits your skin.</p>
             </div>
             <div className="home-feature-grid">
@@ -195,7 +164,7 @@ function Home() {
       <footer className="home-footer">
         <div className="home-footer-top">
           <div className="home-footer-brand">
-            <h4>AURAI</h4>
+            <h4>NYMIRA</h4>
             <p>Personalised skin analysis in seconds — built to help you actually understand and take care of your skin.</p>
           </div>
           <div className="home-footer-links">
@@ -209,18 +178,18 @@ function Home() {
               <h5>Company</h5>
               <span className="footer-link-placeholder">About</span>
               <span className="footer-link-placeholder">Research</span>
-              <a href="mailto:support@aurai.app">Contact</a>
+              <a href="mailto:support@nymira.co.uk">Contact</a>
             </div>
             <div>
               <h5>Support</h5>
               <span className="footer-link-placeholder">Privacy</span>
               <span className="footer-link-placeholder">Terms</span>
-              <a href="mailto:support@aurai.app">support@aurai.app</a>
+              <a href="mailto:support@nymira.co.uk">support@nymira.co.uk</a>
             </div>
           </div>
         </div>
         <div className="home-footer-bottom">
-          <p>© 2026 AURAI. All rights reserved.</p>
+          <p>© 2026 NYMIRA. All rights reserved.</p>
         </div>
       </footer>
     </div>
