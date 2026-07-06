@@ -1185,10 +1185,11 @@ body {
   font-family: "Outfit", "Nunito Sans", sans-serif;
   font-size: clamp(26px, 3.2vw, 42px);
   line-height: 1.08;
-  background: linear-gradient(120deg, #141c3a 40%, #c4aeff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffffff;
+}
+
+.home-section-head h3 .brand-r {
+  color: #277DC8;
 }
 
 .home-section-head::before {

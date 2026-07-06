@@ -39,7 +39,9 @@ function AppHeader() {
   const handleLogout = () => {
     localStorage.removeItem("auraiUser");
     sessionStorage.removeItem("auraiUser");
-    navigate("/", { replace: true });
+    // Full reload so every component re-reads the cleared auth state.
+    // navigate("/") alone is a no-op when already on "/", leaving stale nav buttons.
+    window.location.assign("/");
   };
 
   const displayName = user ? (user.name || user.email || "User") : "";

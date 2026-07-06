@@ -67,7 +67,7 @@ function Home() {
   }, [userId]);
 
   const isAdmin = String(user?.role || "").toLowerCase() === "admin";
-  const ctaLabel = user ? "Start a new scan" : "Get started — it's free";
+  const ctaLabel = user ? "Start a new scan" : "Get started";
   const ctaLink = user ? "/scan" : "/login";
 
   return (
@@ -112,7 +112,7 @@ function Home() {
         <section className="home-neutral-band">
           <section className="home-section-wrap">
             <div className="home-section-head sr sr-up">
-              <h3>Why NYMIRA?</h3>
+              <h3>Why NYMI<span className="brand-r">R</span>A?</h3>
               <p>Real analysis, honest results, and a routine that actually fits your skin.</p>
             </div>
             <div className="home-feature-grid">
@@ -156,8 +156,8 @@ function Home() {
 
         <section className="home-cta-strip sr sr-up">
           <h3>Your skin deserves better</h3>
-          <p>Take a free scan and find out exactly what your skin needs today.</p>
-          <Link to={ctaLink} className="home-cta-strip-btn">Start your free scan</Link>
+          <p>Take a scan and find out exactly what your skin needs today.</p>
+          <Link to={ctaLink} className="home-cta-strip-btn">Start your scan</Link>
         </section>
       </main>
 

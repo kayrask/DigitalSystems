@@ -179,7 +179,7 @@ export default function Routine() {
                       <div>
                         <p className="routine-step-num">{meta.step}</p>
                         <h2 className="routine-product-name">
-                          AURAI {meta.label}
+                          NYMIRA {meta.label}
                         </h2>
                         <p className="routine-product-tagline">{meta.tagline}</p>
                       </div>
