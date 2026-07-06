@@ -4,7 +4,7 @@ import "../App.css";
 import AppHeader from "../components/AppHeader";
 import axios from "axios";
 
-const API_BASE = "http://127.0.0.1:8000";
+import API_BASE from "../config";
 const UI_DETECT_THRESHOLD = 0.5;
 
 const prettyName = {
@@ -62,6 +62,316 @@ const resolveImageUrl = (path) => {
   return `${API_BASE}/${path}`;
 };
 
+// ---------------------------------------------------------------------------
+// Module-level sub-components (stable references — no remount on parent render)
+// ---------------------------------------------------------------------------
+
+function RiskBenefitWidget({ outcome, risk }) {
+  if (!outcome && !risk) return null;
+
+  const benefit = outcome?.benefit || null;
+  const riskLevel = risk?.level;
+  const riskScore = risk?.irritation_score ?? null;
+
+  const riskLevelClass =
+    riskLevel === "high"
+      ? " risk-high"
+      : riskLevel === "medium"
+      ? " risk-medium"
+      : " risk-low";
+
+  return (
+    <div className="history-widget risk-widget">
+      <div className="history-widget-head">
+        <h4>Expected outcome & irritation risk</h4>
+
+        {riskLevel && (
+          <span className={"risk-pill" + riskLevelClass}>
+            Risk: {String(riskLevel).toUpperCase()}
+            {typeof riskScore === "number" ? ` (${riskScore}%)` : ""}
+          </span>
+        )}
+      </div>
+
+      {benefit && (
+        <div className="benefit-list">
+          {Object.entries(benefit).map(([k, v]) => {
+            const score = v?.score ?? 0;
+            const drivers = formatDrivers(v?.drivers || []);
+
+            return (
+              <div key={k} className="benefit-item">
+                <div className="benefit-row">
+                  <b>{prettyName[k] || k}</b>
+                  <span>{score}%</span>
+                </div>
+
+                <div className="benefit-bar">
+                  <div
+                    className="benefit-bar-fill"
+                    style={{
+                      width: `${Math.max(0, Math.min(score, 100))}%`,
+                    }}
+                  />
+                </div>
+
+                {drivers.length > 0 && (
+                  <ul className="benefit-driver-list">
+                    {drivers.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {risk?.drivers?.length > 0 && (
+        <div className="risk-driver-block">
+          <div className="risk-driver-title">
+            Why this risk?
+          </div>
+          <ul className="risk-driver-list">
+            {formatDrivers(risk.drivers).map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="risk-footnote">
+        Proxy estimates for decision support — not a medical prediction.
+      </p>
+    </div>
+  );
+}
+
+function ExplainabilityCard({
+  scanId,
+  adminMode,
+  navigate,
+  explainTarget,
+  explainLoading,
+  explainError,
+  explainOverlay,
+}) {
+  return (
+    <div className="history-widget explain-widget">
+      <div className="history-widget-head">
+        <h4>Explanation overlay</h4>
+        <div className="explain-head-right">
+          <span className="explain-head-note">
+            Highlights areas influencing the prediction
+          </span>
+          {adminMode && (
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => navigate(`/admin/annotate/${scanId}`)}
+              style={{ fontSize: 12, padding: "7px 10px" }}
+            >
+              Annotate
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!explainTarget && !explainLoading && (
+        <p className="hint explain-status">Tap a percentage signal above to load its overlay.</p>
+      )}
+
+      {explainLoading && (
+        <p className="hint explain-status">
+          Generating overlay…
+        </p>
+      )}
+
+      {explainError && (
+        <p className="error-msg explain-status">
+          {explainError}
+        </p>
+      )}
+
+      {explainOverlay && (
+        <div className="explain-overlay-wrap">
+          {typeof explainOverlay === "string" ? (
+            // Overlay type: base64 PNG (Grad-CAM)
+            <>
+              <div className="explain-media-frame">
+                <img
+                  src={`data:image/png;base64,${explainOverlay}`}
+                  alt="Explainability overlay"
+                  className="explain-overlay-img"
+                />
+              </div>
+              <p className="explain-caption">
+                Warmer (redder) regions contributed more to the selected prediction.
+              </p>
+            </>
+          ) : explainOverlay?.type === "boxes" ? (
+            // Boxes type: YOLO detections with boxed image
+            <div className="explain-boxes">
+              <p className="explain-boxes-title">
+                <strong>{prettyName[explainTarget] || explainTarget}</strong>
+                {" "}
+                • {explainOverlay.detection_count || 0} localized detections
+              </p>
+
+              {/* Display boxed image if available */}
+              {explainOverlay.image_png_base64 && (
+                <div className="explain-media-frame">
+                  <img
+                    src={`data:image/png;base64,${explainOverlay.image_png_base64}`}
+                    alt={`${explainTarget} detections`}
+                    className="explain-overlay-img explain-boxes-img"
+                  />
+                </div>
+              )}
+
+              {explainOverlay.detections?.length === 0 ? (
+                <p className="explain-caption">
+                  No localized findings detected. This condition may be diffuse or not present at this confidence level.
+                </p>
+              ) : (
+                <ul className="explain-detection-list">
+                  {explainOverlay.detections.map((d, i) => (
+                    <li key={i}>
+                      <strong>{d.label}</strong> — {(d.confidence * 100).toFixed(1)}% confidence
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="explain-method-note">
+                Detection-based localization (YOLO object detector).
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OutcomeSimulationCard({ scanId, data, isOpen, simLoading, simError, onToggle }) {
+  const isBusy = simLoading && isOpen;
+  const scanError = isOpen ? simError : "";
+
+  // Drag-slider state — stable here because component is module-level
+  const [sliderPos, setSliderPos] = useState(50); // 0-100 %
+  const containerRef = React.useRef(null);
+  const dragging = React.useRef(false);
+
+  const getPos = (clientX) => {
+    if (!containerRef.current) return sliderPos;
+    const rect = containerRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+  };
+
+  const onMouseMove = (e) => {
+    if (!dragging.current) return;
+    setSliderPos(getPos(e.clientX));
+  };
+  const onTouchMove = (e) => {
+    if (!dragging.current) return;
+    setSliderPos(getPos(e.touches[0].clientX));
+  };
+  const stopDrag = () => { dragging.current = false; };
+  const startDrag = () => { dragging.current = true; };
+
+  return (
+    <div className="history-widget outcome-widget">
+      <div className="history-widget-head">
+        <h4>Expected outcome preview</h4>
+        <button
+          type="button"
+          className="ghost-btn"
+          onClick={() => onToggle(scanId)}
+          style={{ fontSize: 12, padding: "7px 10px" }}
+        >
+          {isOpen ? "Hide preview" : "Generate preview"}
+        </button>
+      </div>
+
+      {!isOpen && (
+        <p className="hint explain-status">
+          Generate a visual projection of improvement based on this scan.
+        </p>
+      )}
+
+      {isBusy && (
+        <p className="hint explain-status">Generating expected outcome…</p>
+      )}
+
+      {scanError && <p className="error-msg explain-status">{scanError}</p>}
+
+      {isOpen && data && (
+        <>
+          {/* Before/after drag slider */}
+          <div
+            ref={containerRef}
+            className="outcome-slider-container"
+            onMouseMove={onMouseMove}
+            onMouseUp={stopDrag}
+            onMouseLeave={stopDrag}
+            onTouchMove={onTouchMove}
+            onTouchEnd={stopDrag}
+          >
+            {/* After (base layer — full width) */}
+            <img
+              src={`data:image/png;base64,${data.expected_png_base64}`}
+              alt="Expected outcome"
+              className="outcome-slider-img"
+              draggable={false}
+            />
+
+            {/* Before (overlay — clipped from the right) */}
+            <div
+              className="outcome-slider-before"
+              style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+            >
+              <img
+                src={`data:image/png;base64,${data.current_png_base64}`}
+                alt="Current face"
+                className="outcome-slider-img"
+                draggable={false}
+              />
+            </div>
+
+            {/* Divider line + handle */}
+            <div
+              className="outcome-slider-line"
+              style={{ left: `${sliderPos}%` }}
+            >
+              <div
+                className="outcome-slider-handle"
+                onMouseDown={startDrag}
+                onTouchStart={startDrag}
+              />
+            </div>
+
+            {/* Corner badges */}
+            <span className="outcome-badge outcome-badge-before">Before</span>
+            <span className="outcome-badge outcome-badge-after">After</span>
+          </div>
+
+          <p className="outcome-disclaimer">
+            {data.disclaimer || "Visual simulation only. Not a diagnosis."}
+            {typeof data?.meta?.mean_delta === "number"
+              ? ` • effect strength: ${(data.meta.mean_delta * 100).toFixed(1)}%`
+              : ""}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main History page component
+// ---------------------------------------------------------------------------
+
 function History({ adminMode = false, userIdOverride = null, title = "Recent scans" }) {
   const navigate = useNavigate();
   const [scans, setScans] = useState([]);
@@ -70,12 +380,12 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
   const [targetUser, setTargetUser] = useState(null);
   const [viewerUser, setViewerUser] = useState(null);
 
-  // Phase 4A: explainability state (shared but reset per open scan)
+  // Explainability state (shared, reset per open scan)
   const [explainTarget, setExplainTarget] = useState(null);
   const [explainOverlay, setExplainOverlay] = useState(null);
   const [explainLoading, setExplainLoading] = useState(false);
   const [explainError, setExplainError] = useState("");
-  const [explainCache, setExplainCache] = useState({}); // `${scanId}:${target}` -> base64
+  const [explainCache, setExplainCache] = useState({}); // `${scanId}:${target}` -> data
 
   // Outcome simulation state (per scan, cached)
   const [simLoading, setSimLoading] = useState(false);
@@ -282,252 +592,6 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
     };
   };
 
-  const RiskBenefitWidget = ({ outcome, risk }) => {
-    if (!outcome && !risk) return null;
-
-    const benefit = outcome?.benefit || null;
-    const riskLevel = risk?.level;
-    const riskScore = risk?.irritation_score ?? null;
-
-    const riskLevelClass =
-      riskLevel === "high"
-        ? " risk-high"
-        : riskLevel === "medium"
-        ? " risk-medium"
-        : " risk-low";
-
-    return (
-      <div className="history-widget risk-widget">
-        <div className="history-widget-head">
-          <h4>Expected outcome & irritation risk</h4>
-
-          {riskLevel && (
-            <span className={"risk-pill" + riskLevelClass}>
-              Risk: {String(riskLevel).toUpperCase()}
-              {typeof riskScore === "number" ? ` (${riskScore}%)` : ""}
-            </span>
-          )}
-        </div>
-
-        {benefit && (
-          <div className="benefit-list">
-            {Object.entries(benefit).map(([k, v]) => {
-              const score = v?.score ?? 0;
-              const drivers = formatDrivers(v?.drivers || []);
-
-              return (
-                <div key={k} className="benefit-item">
-                  <div className="benefit-row">
-                    <b>{prettyName[k] || k}</b>
-                    <span>{score}%</span>
-                  </div>
-
-                  <div className="benefit-bar">
-                    <div
-                      className="benefit-bar-fill"
-                      style={{
-                        width: `${Math.max(0, Math.min(score, 100))}%`,
-                      }}
-                    />
-                  </div>
-
-                  {drivers.length > 0 && (
-                    <ul className="benefit-driver-list">
-                      {drivers.map((line, i) => (
-                        <li key={i}>{line}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {risk?.drivers?.length > 0 && (
-          <div className="risk-driver-block">
-            <div className="risk-driver-title">
-              Why this risk?
-            </div>
-            <ul className="risk-driver-list">
-              {formatDrivers(risk.drivers).map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <p className="risk-footnote">
-          Proxy estimates for decision support — not a medical prediction.
-        </p>
-      </div>
-    );
-  };
-
-  const ExplainabilityCard = ({ scanId }) => {
-    return (
-      <div className="history-widget explain-widget">
-        <div className="history-widget-head">
-          <h4>Explanation overlay</h4>
-          <div className="explain-head-right">
-            <span className="explain-head-note">
-              Highlights areas influencing the prediction
-            </span>
-            {adminMode && (
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() => navigate(`/admin/annotate/${scanId}`)}
-                style={{ fontSize: 12, padding: "7px 10px" }}
-              >
-                Annotate
-              </button>
-            )}
-          </div>
-        </div>
-
-        {!explainTarget && !explainLoading && (
-          <p className="hint explain-status">Tap a percentage signal above to load its overlay.</p>
-        )}
-
-        {explainLoading && (
-          <p className="hint explain-status">
-            Generating overlay…
-          </p>
-        )}
-
-        {explainError && (
-          <p className="error-msg explain-status">
-            {explainError}
-          </p>
-        )}
-
-        {explainOverlay && (
-          <div className="explain-overlay-wrap">
-            {typeof explainOverlay === "string" ? (
-              // Overlay type: base64 PNG (Grad-CAM)
-              <>
-                <div className="explain-media-frame">
-                  <img
-                    src={`data:image/png;base64,${explainOverlay}`}
-                    alt="Explainability overlay"
-                    className="explain-overlay-img"
-                  />
-                </div>
-                <p className="explain-caption">
-                  Warmer (redder) regions contributed more to the selected prediction.
-                </p>
-              </>
-            ) : explainOverlay?.type === "boxes" ? (
-              // Boxes type: YOLO detections with boxed image
-              <div className="explain-boxes">
-                <p className="explain-boxes-title">
-                  <strong>{prettyName[explainTarget] || explainTarget}</strong>
-                  {" "}
-                  • {explainOverlay.detection_count || 0} localized detections
-                </p>
-                
-                {/* Display boxed image if available */}
-                {explainOverlay.image_png_base64 && (
-                  <div className="explain-media-frame">
-                    <img
-                      src={`data:image/png;base64,${explainOverlay.image_png_base64}`}
-                      alt={`${explainTarget} detections`}
-                      className="explain-overlay-img explain-boxes-img"
-                    />
-                  </div>
-                )}
-                
-                {explainOverlay.detections?.length === 0 ? (
-                  <p className="explain-caption">
-                    No localized findings detected. This condition may be diffuse or not present at this confidence level.
-                  </p>
-                ) : (
-                  <ul className="explain-detection-list">
-                    {explainOverlay.detections.map((d, i) => (
-                      <li key={i}>
-                        <strong>{d.label}</strong> — {(d.confidence * 100).toFixed(1)}% confidence
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="explain-method-note">
-                  Detection-based localization (YOLO object detector).
-                </p>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const OutcomeSimulationCard = ({ scanId }) => {
-    const data = simCache[scanId];
-    const isOpen = simOpenForScan === scanId;
-    const isBusy = simLoading && isOpen;
-    const scanError = isOpen ? simError : "";
-
-    return (
-      <div className="history-widget outcome-widget">
-        <div className="history-widget-head">
-          <h4>Expected outcome preview</h4>
-          <button
-            type="button"
-            className="ghost-btn"
-            onClick={() => handleOutcomeToggle(scanId)}
-            style={{ fontSize: 12, padding: "7px 10px" }}
-          >
-            {isOpen ? "Hide preview" : "Generate preview"}
-          </button>
-        </div>
-
-        {!isOpen && (
-          <p className="hint explain-status">
-            Generate a visual projection of improvement based on this scan.
-          </p>
-        )}
-
-        {isBusy && (
-          <p className="hint explain-status">Generating expected outcome…</p>
-        )}
-
-        {scanError && <p className="error-msg explain-status">{scanError}</p>}
-
-        {isOpen && data && (
-          <div className="outcome-compare">
-            <div className="outcome-col">
-              <p className="outcome-label">Current</p>
-              <div className="explain-media-frame">
-                <img
-                  src={`data:image/png;base64,${data.current_png_base64}`}
-                  alt="Current face"
-                  className="explain-overlay-img"
-                />
-              </div>
-            </div>
-            <div className="outcome-col">
-              <p className="outcome-label">Expected</p>
-              <div className="explain-media-frame">
-                <img
-                  src={`data:image/png;base64,${data.expected_png_base64}`}
-                  alt="Expected outcome preview"
-                  className="explain-overlay-img"
-                />
-              </div>
-            </div>
-            <p className="outcome-disclaimer">
-              {data.disclaimer || "Visual simulation only. Not a diagnosis."}
-              {typeof data?.meta?.mean_delta === "number"
-                ? ` • effect strength: ${(data.meta.mean_delta * 100).toFixed(1)}%`
-                : ""}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="app-root">
       <AppHeader />
@@ -611,7 +675,7 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
                               <span className="history-id">Scan #{scan.id}</span>
                             </div>
                             <span className="history-toggle-tag">
-                              <span>{isOpen ? "Hide details" : "View details"}</span>
+                              <span>{isOpen ? "Tap to hide details" : "Tap to view details"}</span>
                               <span className={"history-toggle-chevron" + (isOpen ? " is-open" : "")}>
                                 ▾
                               </span>
@@ -637,9 +701,20 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
                             </div>
                           )}
 
-                          <span className="history-meta-note">
-                            Tap to {isOpen ? "collapse" : "expand"} details
-                          </span>
+                          {scan.results?.routine?.steps && (
+                            <button
+                              className="history-routine-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/routine/${scan.id}`);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                              </svg>
+                              View Routine
+                            </button>
+                          )}
                         </div>
 
                         <div className="history-col-signals">
@@ -690,11 +765,28 @@ function History({ adminMode = false, userIdOverride = null, title = "Recent sca
                           </span>
                         </div>
                         <div className="history-detail-content">
-                          {/* Phase 4A: Explainability */}
-                          <ExplainabilityCard scanId={scan.id} />
-                          <OutcomeSimulationCard scanId={scan.id} />
+                          {/* Explainability */}
+                          <ExplainabilityCard
+                            scanId={scan.id}
+                            adminMode={adminMode}
+                            navigate={navigate}
+                            explainTarget={explainTarget}
+                            explainLoading={explainLoading}
+                            explainError={explainError}
+                            explainOverlay={explainOverlay}
+                          />
 
-                          {/* Phase 3: Risk/Benefit */}
+                          {/* Outcome simulation */}
+                          <OutcomeSimulationCard
+                            scanId={scan.id}
+                            data={simCache[scan.id]}
+                            isOpen={simOpenForScan === scan.id}
+                            simLoading={simLoading}
+                            simError={simError}
+                            onToggle={handleOutcomeToggle}
+                          />
+
+                          {/* Risk/Benefit */}
                           <RiskBenefitWidget outcome={outcome} risk={risk} />
 
                           {/* Routine / formulas (admin only) */}

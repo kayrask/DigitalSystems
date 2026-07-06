@@ -15,6 +15,8 @@ import Profile from "./pages/Profile";
 import AdminAnnotate from "./pages/AdminAnnotate";
 import AdminUsers from "./pages/AdminUsers";
 import AdminUserScans from "./pages/AdminUserScans";
+import Routine from "./pages/Routine";
+import RoutineIndex from "./pages/RoutineIndex";
 
 
 
@@ -36,6 +38,8 @@ function App() {
         <Route path="/admin/users/:userId/scans" element={<AdminUserScans />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin/annotate/:scanId" element={<AdminAnnotate />} />
+        <Route path="/routine" element={<RoutineIndex />} />
+        <Route path="/routine/:scanId" element={<Routine />} />
       </Routes>
     </Router>
   );

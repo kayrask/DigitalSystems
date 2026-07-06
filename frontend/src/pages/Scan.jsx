@@ -144,6 +144,7 @@ function Scan() {
       const imagePath = data.image_path || null; // backward compat
       const imagePathFull = data.image_path_full || null;
       const imagePathFace = data.image_path_face || null;
+      const imagePathFaceRaw = data.image_path_face_raw || null;
       const faceBbox = data.face_bbox || data.face?.bbox || null;
 
       setResults(newResults);
@@ -173,6 +174,7 @@ function Scan() {
                 image_path: imagePath,                 // optional
                 image_path_full: imagePathFull,         // ✅ for /explain full overlay
                 image_path_face: imagePathFace,         // ✅ for /explain full overlay
+                image_path_face_raw: imagePathFaceRaw,   // ✅ for /simulate_outcome (unmasked crop)
                 face_bbox: faceBbox,                    // ✅ for /explain full overlay
               },
             });
@@ -341,6 +343,9 @@ function Scan() {
 
           {results && (
             <div className="scan-results-wrap">
+              <p className="scan-results-caption">
+                Confidence signals detected in your photo
+              </p>
               <div className="results-grid">
                 {Object.entries(results).map(([key, value]) => {
                   const prob = value?.probability || 0;

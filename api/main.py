@@ -2,7 +2,6 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from api.inference import SkinModel, SkinTypeModel, SkinToneModel, LABELS
 from PIL import Image, ImageOps, ImageDraw, ImageFilter
-from pydantic import BaseModel
 from api.recommender import recommend_routine
 from typing import Optional, List
 from api.quality_gate import assess_image_quality, QualityConfig
@@ -20,6 +19,7 @@ import os
 import io
 import json
 import base64
+import hashlib
 
 import bcrypt
 from dotenv import load_dotenv
@@ -399,45 +399,6 @@ def is_admin_user(user_id: Optional[int]) -> bool:
             conn.close()
         return False
 
-
-class RegisterRequest(BaseModel):
-    name: str
-    email: str
-    password: str
-    address: Optional[str] = None
-    allergies: Optional[str] = None
-
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class ScanCreate(BaseModel):
-    user_id: int
-    results: dict
-
-class AnnotationSave(BaseModel):
-    scan_id: int
-    user_id: Optional[int] = None
-    image_kind: Optional[str] = "face_raw"
-    boxes: List[dict]
-    strokes: Optional[List[dict]] = None
-    notes: Optional[str] = None
-
-class AdminPromoteRequest(BaseModel):
-    email: str
-    code: str
-
-class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    age: Optional[int] = None
-    address: Optional[str] = None
-    allergies: Optional[str] = None
-
 UPLOAD_DIR = "uploads"
 
 def save_upload_image(contents: bytes, suffix: str = "") -> str:
@@ -588,39 +549,42 @@ def simulate_expected_outcome(
             local_luma[..., None] * (0.16 * texture_level * texture_mask[..., None])
         )
 
-    # 2) Redness correction: reduce local saturation/red dominance without hue-casting.
-    red_level = np.clip(red_p * strength * 0.46, 0.0, 0.34)
-    if red_p_raw > 0.08 and red_level < 0.06 * strength:
-        red_level = 0.06 * strength
+    # 2) Redness correction: reduce red-channel dominance while preserving skin warmth.
+    red_level = np.clip(red_p * strength * 0.50, 0.0, 0.34)
+    if red_p_raw > 0.08 and red_level < 0.07 * strength:
+        red_level = 0.07 * strength
     if red_level > 1e-4:
         r = out[..., 0]
         g = out[..., 1]
         b = out[..., 2]
         excess_red = np.clip(r - (0.52 * g + 0.48 * b), 0.0, 1.0)
         red_mask = _smoothstep(excess_red, 0.02, 0.22) * skin_mask
-        # Pull toward local luminance to avoid green/purple color shift.
-        local_luma = 0.299 * r + 0.587 * g + 0.114 * b
-        sat_reduce = (0.62 * red_level) * red_mask
-        out = out * (1.0 - sat_reduce[..., None]) + local_luma[..., None] * sat_reduce[..., None]
-        # Slight brightness lift for "post-treatment" look.
-        out = np.clip(out + (0.08 * red_level * red_mask[..., None]), 0.0, 1.0)
+        # Blend red channel toward green/blue average to reduce redness without graying.
+        # This shifts hue rather than desaturating fully toward luma.
+        target_r = np.clip((0.55 * g + 0.45 * b) * 1.05, 0.0, 1.0)
+        blend_w = (0.58 * red_level) * red_mask
+        new_r = r * (1.0 - blend_w) + target_r * blend_w
+        out = np.stack([new_r, g, b], axis=-1)
+        # Slight brightness lift in corrected areas for a cleaner post-treatment look.
+        out = np.clip(out + (0.06 * red_level * red_mask[..., None]), 0.0, 1.0)
 
     # 3) Hyperpigmentation correction: lift darker areas while preserving chroma.
-    pig_level = np.clip(pig_p * strength * 0.50, 0.0, 0.32)
-    if pig_p_raw > 0.08 and pig_level < 0.06 * strength:
-        pig_level = 0.06 * strength
+    pig_level = np.clip(pig_p * strength * 0.52, 0.0, 0.34)
+    if pig_p_raw > 0.08 and pig_level < 0.07 * strength:
+        pig_level = 0.07 * strength
     if pig_level > 1e-4:
         y = 0.299 * out[..., 0] + 0.587 * out[..., 1] + 0.114 * out[..., 2]
-        dark_mask = _smoothstep(0.74 - y, 0.04, 0.33) * skin_mask
+        dark_mask = _smoothstep(0.72 - y, 0.04, 0.32) * skin_mask
         dark_mask = np.asarray(
             Image.fromarray((dark_mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=5))
         ).astype(np.float32) / 255.0
-        # Lighten toward white in a bounded way to keep skin tone realistic.
-        lift = (pig_level * 0.55) * dark_mask[..., None]
-        out = np.clip(out + lift * (1.0 - out), 0.0, 1.0)
+        # Lift multiplicatively (scales pixel toward white proportionally to its current value).
+        # This preserves relative chroma better than additive lift toward white.
+        scale = 1.0 + (pig_level * 0.44) * dark_mask
+        out = np.clip(out * scale[..., None], 0.0, 1.0)
 
     # 4) Under-eye softening based on ROI boxes when available (luma-only style).
-    bags_level = np.clip(bags_p * strength * 0.32, 0.0, 0.22)
+    bags_level = np.clip(bags_p * strength * 0.40, 0.0, 0.28)
     if bags_p_raw > 0.08 and bags_level < 0.05 * strength:
         bags_level = 0.05 * strength
     if bags_level > 1e-4:
@@ -893,11 +857,10 @@ async def predict(
         }
 
     # --- YOLO detection on face crop (for sanity + localization) ---
-    # conf=0.20: 0.10 was too noisy, producing false detections at 10% confidence
     try:
         yolo_boxes = yolo_detector.predict(
             face_img_raw,
-            conf=0.20,
+            conf=0.10,
             iou=0.45,
             imgsz=512,
             max_det=100,
@@ -977,206 +940,14 @@ async def predict(
 
 
 
-# === Auth endpoints using MySQL ===
-
-@app.post("/register")
-def register(user: RegisterRequest):
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        sql = """
-        INSERT INTO users (name, email, password_hash, role, address, allergies)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cur.execute(
-            sql,
-            (
-                user.name.strip(),
-                user.email.strip().lower(),
-                hash_password(user.password),
-                "user",
-                user.address,
-                user.allergies,
-            ),
-        )
-
-        conn.commit()
-        user_id = cur.lastrowid
-
-        cur.close()
-        conn.close()
-
-        return {
-            "id": user_id,
-            "name": user.name.strip(),
-            "email": user.email.strip().lower(),
-            "role": "user",
-        }
 
 
-    except IntegrityError:
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    except Error as e:
-        print("MySQL error in /register:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.post("/login")
-def login(data: LoginRequest):
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        sql = """
-        SELECT id, name, email, password_hash, role
-        FROM users
-        WHERE email = %s
-        """
-        cur.execute(sql, (data.email.strip().lower(),))
-        row = cur.fetchone()
-
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if row is None:
-            raise HTTPException(status_code=400, detail="Invalid email or password")
-
-        user_id, name, email, pw_hash, role = row
-
-        if not verify_password(data.password, pw_hash):
-            raise HTTPException(status_code=400, detail="Invalid email or password")
-
-        return {"id": user_id, "name": name, "email": email, "role": role or "user"}
-
-    except Error as e:
-        print("MySQL error in /login:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.post("/scans")
-def save_scan(data: ScanCreate):
-    """Save a scan result for a user."""
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        sql = """
-        INSERT INTO scans (user_id, results_json)
-        VALUES (%s, %s)
-        """
-        cur.execute(sql, (data.user_id, json.dumps(data.results)))
-        conn.commit()
-        scan_id = cur.lastrowid
-
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        return {"id": scan_id}
-
-    except Error as e:
-        print("MySQL error in /scans (POST):", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.get("/scans")
-def list_scans(user_id: int, limit: int = 10):
-    """Return recent scans for a user (newest first)."""
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        sql = """
-        SELECT id, created_at, results_json
-        FROM scans
-        WHERE user_id = %s
-        ORDER BY created_at DESC
-        LIMIT %s
-        """
-        cur.execute(sql, (user_id, limit))
-        rows = cur.fetchall()
-
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        scans = []
-        for row in rows:
-            scan_id, created_at, results_json = row
-            try:
-                results = json.loads(results_json)
-            except Exception:
-                results = {}
-            scans.append(
-                {
-                    "id": scan_id,
-                    "created_at": created_at,
-                    "results": results,
-                }
-            )
-
-        return {"items": scans}
-
-    except Error as e:
-        print("MySQL error in /scans (GET):", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-@app.get("/scans/{scan_id}")
-def get_scan(scan_id: int):
-    """Return one scan record by id."""
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, user_id, created_at, results_json
-            FROM scans
-            WHERE id=%s
-            LIMIT 1
-            """,
-            (scan_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if not row:
-            raise HTTPException(status_code=404, detail="Scan not found")
-
-        sid, uid, created_at, results_json = row
-        try:
-            results = json.loads(results_json or "{}")
-        except Exception:
-            results = {}
-
-        return {"id": sid, "user_id": uid, "created_at": created_at, "results": results}
-
-    except HTTPException:
-        raise
-    except Error as e:
-        print("MySQL error in /scans/{scan_id}:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
 @app.get("/simulate_outcome")
@@ -1266,300 +1037,14 @@ def simulate_outcome(scan_id: int, user_id: int, strength: float = 0.9):
         raise HTTPException(status_code=500, detail="Failed to generate outcome simulation")
 
 
-@app.get("/admin/scan-image/{scan_id}")
-def get_admin_scan_image(scan_id: int, user_id: int, kind: str = "face_raw"):
-    """
-    Returns scan image as base64 PNG for admin annotation UI.
-    kind: face_raw | face | full
-    """
-    conn = None
-    try:
-        if not is_admin_user(user_id):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT results_json FROM scans WHERE id=%s", (scan_id,))
-        row = cur.fetchone()
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if not row:
-            raise HTTPException(status_code=404, detail="Scan not found")
-
-        results_obj = json.loads(row[0] or "{}")
-        path_by_kind = {
-            "face_raw": results_obj.get("image_path_face_raw"),
-            "face": results_obj.get("image_path_face"),
-            "full": results_obj.get("image_path_full"),
-        }
-        image_path = path_by_kind.get(kind) or results_obj.get("image_path_face_raw") or results_obj.get("image_path_face")
-        if not image_path or not os.path.exists(image_path):
-            raise HTTPException(status_code=404, detail="Scan image not found on server")
-
-        img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
-        return {
-            "ok": True,
-            "scan_id": scan_id,
-            "kind": kind,
-            "image_png_base64": pil_to_base64_png(img),
-            "size": {"w": img.size[0], "h": img.size[1]},
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print("Error in /admin/scan-image:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Failed to load scan image")
 
 
-@app.get("/admin/users")
-def list_admin_users(user_id: int, limit: int = 200):
-    conn = None
-    try:
-        if not is_admin_user(user_id):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                u.id, u.name, u.email, u.role,
-                COUNT(s.id) AS scan_count,
-                MAX(s.created_at) AS last_scan_at
-            FROM users u
-            LEFT JOIN scans s ON s.user_id = u.id
-            GROUP BY u.id, u.name, u.email, u.role
-            ORDER BY last_scan_at DESC, u.id DESC
-            LIMIT %s
-            """,
-            (limit,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        items = []
-        for r in rows:
-            items.append(
-                {
-                    "id": r[0],
-                    "name": r[1],
-                    "email": r[2],
-                    "role": r[3] or "user",
-                    "scan_count": int(r[4] or 0),
-                    "last_scan_at": r[5],
-                }
-            )
-        return {"ok": True, "items": items}
-    except HTTPException:
-        raise
-    except Error as e:
-        print("MySQL error in /admin/users:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.get("/admin/users/{target_user_id}/scans")
-def list_admin_user_scans(target_user_id: int, user_id: int, limit: int = 30):
-    conn = None
-    try:
-        if not is_admin_user(user_id):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        conn = get_connection()
-        cur = conn.cursor()
-
-        cur.execute(
-            """
-            SELECT id, name, email, role
-            FROM users
-            WHERE id=%s
-            LIMIT 1
-            """,
-            (target_user_id,),
-        )
-        user_row = cur.fetchone()
-        if not user_row:
-            cur.close()
-            if conn.is_connected():
-                conn.close()
-            raise HTTPException(status_code=404, detail="Target user not found")
-
-        cur.execute(
-            """
-            SELECT id, created_at, results_json
-            FROM scans
-            WHERE user_id=%s
-            ORDER BY created_at DESC
-            LIMIT %s
-            """,
-            (target_user_id, limit),
-        )
-        rows = cur.fetchall()
-
-        scan_ids = [int(r[0]) for r in rows]
-        ann_by_scan = {}
-        if scan_ids:
-            placeholders = ",".join(["%s"] * len(scan_ids))
-            cur.execute(
-                f"""
-                SELECT scan_id, annotations_json, notes, updated_at, user_id
-                FROM scan_annotations
-                WHERE scan_id IN ({placeholders})
-                """,
-                tuple(scan_ids),
-            )
-            for a in cur.fetchall():
-                try:
-                    ann_obj = json.loads(a[1] or "{}")
-                except Exception:
-                    ann_obj = {"boxes": []}
-                ann_by_scan[int(a[0])] = {
-                    "annotations": ann_obj,
-                    "notes": a[2],
-                    "updated_at": a[3],
-                    "annotated_by_user_id": a[4],
-                }
-
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        scans = []
-        for row in rows:
-            sid, created_at, results_json = row
-            try:
-                results = json.loads(results_json or "{}")
-            except Exception:
-                results = {}
-            scans.append(
-                {
-                    "id": sid,
-                    "created_at": created_at,
-                    "results": results,
-                    "annotation": ann_by_scan.get(int(sid)),
-                }
-            )
-
-        return {
-            "ok": True,
-            "target_user": {
-                "id": user_row[0],
-                "name": user_row[1],
-                "email": user_row[2],
-                "role": user_row[3] or "user",
-            },
-            "items": scans,
-        }
-    except HTTPException:
-        raise
-    except Error as e:
-        print("MySQL error in /admin/users/{target_user_id}/scans:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.get("/admin/annotations")
-def get_admin_annotations(scan_id: int, user_id: int):
-    conn = None
-    try:
-        if not is_admin_user(user_id):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT scan_id, user_id, image_kind, annotations_json, notes, updated_at
-            FROM scan_annotations
-            WHERE scan_id=%s
-            LIMIT 1
-            """,
-            (scan_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if not row:
-            return {"ok": True, "scan_id": scan_id, "annotation": None}
-
-        sid, uid, image_kind, annotations_json, notes, updated_at = row
-        try:
-            annotations = json.loads(annotations_json or "{}")
-        except Exception:
-            annotations = {"boxes": []}
-
-        return {
-            "ok": True,
-            "scan_id": sid,
-            "annotation": {
-                "scan_id": sid,
-                "user_id": uid,
-                "image_kind": image_kind,
-                "annotations": annotations,
-                "notes": notes,
-                "updated_at": updated_at,
-            },
-        }
-
-    except Error as e:
-        print("MySQL error in /admin/annotations (GET):", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
 
 
-@app.post("/admin/annotations")
-def save_admin_annotations(data: AnnotationSave):
-    conn = None
-    try:
-        if not is_admin_user(data.user_id):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        conn = get_connection()
-        cur = conn.cursor()
-
-        annotations_json = json.dumps(
-            {
-                "boxes": data.boxes or [],
-                "strokes": data.strokes or [],
-            }
-        )
-        cur.execute(
-            """
-            INSERT INTO scan_annotations (scan_id, user_id, image_kind, annotations_json, notes)
-            VALUES (%s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                user_id = VALUES(user_id),
-                image_kind = VALUES(image_kind),
-                annotations_json = VALUES(annotations_json),
-                notes = VALUES(notes)
-            """,
-            (data.scan_id, data.user_id, data.image_kind or "face_raw", annotations_json, data.notes),
-        )
-
-        conn.commit()
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        return {
-            "ok": True,
-            "scan_id": data.scan_id,
-            "saved_boxes": len(data.boxes or []),
-            "saved_strokes": len(data.strokes or []),
-        }
-
-    except Error as e:
-        print("MySQL error in /admin/annotations (POST):", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
     
 @app.get("/explain")
 def explain(scan_id: int, target: str):
@@ -1601,12 +1086,17 @@ def explain(scan_id: int, target: str):
         # Always derive face crop from the full image + bbox to avoid oval-masked artifacts.
         face_img = full_img.crop((bx, by, bx + bw, by + bh)).convert("RGB")
 
+        # Compute BiSeNet skin mask early — used for both YOLO masking and Grad-CAM constraint
+        skin_mask = face_parser.skin_mask(face_img)
+        skin_only_img = apply_skin_mask(face_img, skin_mask)
+
         # If we have YOLO, use boxes for localized issues instead of Grad-CAM
         LOCALIZED = {"acne", "blackheads", "bags"}
         if target in LOCALIZED:
+            # Run YOLO on skin-only image to avoid detections in hair/background
             yolo_boxes = yolo_detector.predict(
-                face_img,
-                conf=0.20,
+                skin_only_img,
+                conf=0.10,
                 iou=0.45,
                 imgsz=512,
                 max_det=100,
@@ -1659,9 +1149,6 @@ def explain(scan_id: int, target: str):
                 "detection_count": len(detections),
             }
 
-        skin_mask = face_parser.skin_mask(face_img)
-        skin_only_img = apply_skin_mask(face_img, skin_mask)
-
         # 1) ROI-aware Grad-CAM (localized) or full-face Grad-CAM (diffuse)
         rois = extract_rois_with_boxes(face_img)
         exclusion_mask = rois.get("exclude_mouth_moustache_mask")
@@ -1677,7 +1164,7 @@ def explain(scan_id: int, target: str):
             explain_img = skin_only_img
             if exclusion_mask is not None and target in SENSITIVE_TARGETS:
                 explain_img = apply_exclusion_mask_pil(explain_img, exclusion_mask)
-            out = gradcam_overlay_base64(model, explain_img, target_label=target)
+            out = gradcam_overlay_base64(model, explain_img, target_label=target, skin_mask=skin_mask)
             face_overlay_canvas = base64png_to_pil_rgba(out["overlay_png_base64"]).resize(
                 face_img.size
             ).convert("RGBA")
@@ -1697,8 +1184,9 @@ def explain(scan_id: int, target: str):
                     exclude_crop = exclusion_mask[y1:y2, x1:x2]
                     roi_img = apply_exclusion_mask_pil(roi_img, exclude_crop)
 
-                # Grad-CAM on ROI crop
-                out = gradcam_overlay_base64(model, roi_img, target_label=target)
+                # Grad-CAM on ROI crop — pass skin mask slice for this ROI
+                roi_skin_mask = skin_mask[y1:y2, x1:x2] if skin_mask is not None else None
+                out = gradcam_overlay_base64(model, roi_img, target_label=target, skin_mask=roi_skin_mask)
                 roi_overlay = base64png_to_pil_rgba(out["overlay_png_base64"])
                 if exclude_crop is not None:
                     ov = np.array(roi_overlay)
@@ -1753,153 +1241,11 @@ def explain(scan_id: int, target: str):
         if conn is not None and getattr(conn, "is_connected", lambda: False)():
             conn.close()
 
-@app.get("/me")
-def get_me(user_id: int):
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
 
-        sql = """
-        SELECT id, name, email, role, phone, age, address, allergies
-        FROM users
-        WHERE id = %s
-        """
-        cur.execute(sql, (user_id,))
-        row = cur.fetchone()
+# === Route modules ===
+from api.routes import auth, scans, users, admin
 
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if row is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        uid, name, email, role, phone, age, address, allergies = row
-        return {
-            "id": uid,
-            "name": name,
-            "email": email,
-            "role": role or "user",
-            "phone": phone,
-            "age": age,
-            "address": address,
-            "allergies": allergies,
-        }
-    except Error as e:
-        print("MySQL error in /me (GET):", e)
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-@app.put("/me")
-def update_me(user_id: int, data: ProfileUpdate):
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-
-        # Load existing so we can update only provided fields
-        cur.execute(
-            "SELECT name, email, role, phone, age, address, allergies FROM users WHERE id=%s",
-            (user_id,),
-        )
-        row = cur.fetchone()
-        if row is None:
-            cur.close()
-            if conn.is_connected():
-                conn.close()
-            raise HTTPException(status_code=404, detail="User not found")
-
-        current = {
-            "name": row[0],
-            "email": row[1],
-            "role": row[2] or "user",
-            "phone": row[3],
-            "age": row[4],
-            "address": row[5],
-            "allergies": row[6],
-        }
-
-        updated = {
-            "name": current["name"],
-            "email": current["email"],
-            "phone": data.phone if data.phone is not None else current["phone"],
-            "age": current["age"], 
-            "address": data.address if data.address is not None else current["address"],
-            "allergies": data.allergies if data.allergies is not None else current["allergies"],
-        }
-
-        # email uniqueness check if changed
-        if updated["email"] != current["email"]:
-            cur.execute("SELECT id FROM users WHERE email=%s AND id<>%s", (updated["email"], user_id))
-            if cur.fetchone() is not None:
-                cur.close()
-                if conn.is_connected():
-                    conn.close()
-                raise HTTPException(status_code=400, detail="Email already in use")
-
-        sql = """
-        UPDATE users
-        SET name=%s, email=%s, phone=%s, age=%s, address=%s, allergies=%s
-        WHERE id=%s
-        """
-        cur.execute(
-            sql,
-            (
-                updated["name"],
-                updated["email"],
-                updated["phone"],
-                updated["age"],
-                updated["address"],
-                updated["allergies"],
-                user_id,
-            ),
-        )
-        conn.commit()
-
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        return {"ok": True, "user": {"id": user_id, "role": current["role"], **updated}}
-    except IntegrityError:
-        raise HTTPException(status_code=400, detail="Email already in use")
-    except Error as e:
-        print("MySQL error in /me (PUT):", e)
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-@app.post("/admin/bootstrap/promote")
-def promote_user_to_admin(data: AdminPromoteRequest):
-    """
-    One-time/admin-only utility for local setup.
-    Set ADMIN_PROMOTE_CODE in env and call this endpoint to promote a user by email.
-    """
-    expected = os.environ.get("ADMIN_PROMOTE_CODE")
-    if not expected:
-        raise HTTPException(status_code=500, detail="ADMIN_PROMOTE_CODE is not configured")
-    if data.code != expected:
-        raise HTTPException(status_code=403, detail="Invalid admin promotion code")
-
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE users SET role='admin' WHERE email=%s",
-            (data.email.strip().lower(),),
-        )
-        conn.commit()
-        changed = cur.rowcount
-        cur.close()
-        if conn.is_connected():
-            conn.close()
-
-        if changed == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-        return {"ok": True, "email": data.email.strip().lower(), "role": "admin"}
-    except HTTPException:
-        raise
-    except Error as e:
-        print("MySQL error in /admin/bootstrap/promote:", e)
-        if conn is not None and conn.is_connected():
-            conn.close()
-        raise HTTPException(status_code=500, detail="Database error")
+app.include_router(auth.router)
+app.include_router(scans.router)
+app.include_router(users.router)
+app.include_router(admin.router)

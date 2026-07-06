@@ -3,212 +3,169 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
 import AppHeader from "../components/AppHeader";
+import API_BASE from "../config";
 
-const API_BASE = "http://127.0.0.1:8000";
+function useScrollReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".sr");
+    if (!els.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("sr-visible");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0 }
+    );
+    els.forEach((el) => io.observe(el));
+    const fallback = setTimeout(() => {
+      els.forEach((el) => el.classList.add("sr-visible"));
+    }, 1500);
+    return () => {
+      io.disconnect();
+      clearTimeout(fallback);
+    };
+  }, []);
+}
 
 function Home() {
-  const stored =
-    localStorage.getItem("auraiUser") ||
-    sessionStorage.getItem("auraiUser");
+  useScrollReveal();
 
+  useEffect(() => {
+    function tryInit() {
+      if (typeof window.initLiquidEther === 'function') {
+        window.initLiquidEther('liquid-hero-bg');
+      } else {
+        setTimeout(tryInit, 50);
+      }
+    }
+    tryInit();
+    return () => { if (window._leDestroy) window._leDestroy(); };
+  }, []);
+
+  const stored = localStorage.getItem("auraiUser") || sessionStorage.getItem("auraiUser");
   let user = null;
-  try {
-    user = stored ? JSON.parse(stored) : null;
-  } catch {
-    user = null;
-  }
+  try { user = stored ? JSON.parse(stored) : null; } catch { user = null; }
 
   const [hasPreviousScans, setHasPreviousScans] = useState(false);
-
   const userId = useMemo(() => user?.id ?? null, [user]);
 
   useEffect(() => {
     let mounted = true;
-
     const checkScans = async () => {
-      if (!userId) {
-        if (mounted) setHasPreviousScans(false);
-        return;
-      }
+      if (!userId) { if (mounted) setHasPreviousScans(false); return; }
       try {
-        const res = await axios.get(`${API_BASE}/scans`, {
-          params: { user_id: userId, limit: 1 },
-        });
-        const hasItems = Array.isArray(res.data?.items) && res.data.items.length > 0;
-        if (mounted) setHasPreviousScans(hasItems);
-      } catch {
-        if (mounted) setHasPreviousScans(false);
-      }
+        const res = await axios.get(`${API_BASE}/scans`, { params: { user_id: userId, limit: 1 } });
+        if (mounted) setHasPreviousScans(Array.isArray(res.data?.items) && res.data.items.length > 0);
+      } catch { if (mounted) setHasPreviousScans(false); }
     };
-
     checkScans();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [userId]);
 
-  const ctaLabel = user ? "✨ Start a new scan" : "✨ Get started";
+  const isAdmin = String(user?.role || "").toLowerCase() === "admin";
+  const ctaLabel = user ? "Start a new scan" : "Get started — it's free";
   const ctaLink = user ? "/scan" : "/login";
 
   return (
-    <div className="app-root">
+    <div className="app-root home-page">
+      {/* Fixed full-page fluid canvas — sits behind everything */}
+      <div id="liquid-hero-bg" className="home-hero-fluid" />
+
       <AppHeader />
 
+      {/* Hero lives OUTSIDE home-main so it gets full width natively */}
+      <section className="home-hero-card">
+        <div className="home-hero-center">
+          <p className="home-hero-kicker">Skin analysis, personalised for you</p>
+          <h2>
+            Your skin,<br />
+            <span className="home-hero-gradient">finally understood.</span>
+          </h2>
+          <p className="home-hero-text">
+            Upload a photo and get a full analysis — concerns, type, tone —
+            and a personalised routine made just for you. In seconds.
+          </p>
+          <div className="home-hero-actions">
+            <Link to={ctaLink} className="primary-btn home-main-cta">{ctaLabel}</Link>
+            {isAdmin && (
+              <Link to="/admin/users" className="ghost-btn home-secondary-cta">Admin panel</Link>
+            )}
+            {user && hasPreviousScans && (
+              <Link to="/history" className="ghost-btn home-secondary-cta">View recent scans</Link>
+            )}
+          </div>
+          <div className="home-hero-stats">
+            <div className="home-hero-stat"><strong>5</strong><span>Skin concerns detected</span></div>
+            <div className="home-hero-stat"><strong>95%</strong><span>Detection accuracy</span></div>
+            <div className="home-hero-stat"><strong>&lt;3s</strong><span>Full analysis time</span></div>
+            <div className="home-hero-stat"><strong>4</strong><span>Routine steps built</span></div>
+          </div>
+        </div>
+      </section>
+
       <main className="home-main">
-        <section className="home-hero-card">
-          <div className="home-hero-left reveal reveal-1">
-            <p className="home-hero-kicker reveal reveal-1">AI-Powered Skin Analysis</p>
-            <h2 className="reveal reveal-1">
-              Discover Your Perfect
-              <br />
-              Skincare Routine
-            </h2>
-            <p className="home-hero-text reveal reveal-2">
-              Get personalized insights based on one clear selfie. AURAI combines
-              model scoring, region-aware localization, and routine guidance in one flow.
-            </p>
-
-            <div className="home-hero-actions reveal reveal-3">
-              <Link to={ctaLink} className="primary-btn home-main-cta">
-                {ctaLabel}
-              </Link>
-              <Link to={user ? "/scan" : "/register"} className="ghost-btn home-secondary-cta">
-                Browse features
-              </Link>
-              {user && hasPreviousScans && (
-                <Link to="/history" className="ghost-btn home-secondary-cta">
-                  View recent scans
-                </Link>
-              )}
-            </div>
-
-            <div className="home-hero-stats reveal reveal-4">
-              <div className="home-hero-stat">
-                <strong>5</strong><span>Core concerns tracked</span>
-              </div>
-              <div className="home-hero-stat">
-                <strong>30+</strong><span>Regression checks</span>
-              </div>
-              <div className="home-hero-stat">
-                <strong>2.5s</strong><span>Average scan time</span>
-              </div>
-            </div>
-
-            <div className="home-hero-badges reveal reveal-4">
-              <span>Free analysis</span>
-              <span>Personalized output</span>
-              <span>Explainable results</span>
-            </div>
-          </div>
-
-          <div className="home-hero-right reveal reveal-4">
-            <div className="home-visual-stage">
-              <div className="home-portrait-backdrop" />
-              <div className="home-phone">
-                <div className="home-phone-notch" />
-                <div className="home-phone-screen">
-                  <div className="home-screen-hero">
-                    <p>Scan confidence</p>
-                    <strong>96.4%</strong>
-                  </div>
-                  <div className="home-mini-results">
-                    <div className="home-mini-row">
-                      <span>Acne</span>
-                      <span>32%</span>
-                    </div>
-                    <div className="home-mini-row">
-                      <span>Redness</span>
-                      <span>11%</span>
-                    </div>
-                    <div className="home-mini-row">
-                      <span>Blackheads</span>
-                      <span>24%</span>
-                    </div>
-                  </div>
-                  <div className="home-screen-footer">
-                    <span>Recent trend</span>
-                    <span className="home-trend-pill">Improving</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="home-neutral-band reveal reveal-2">
+        <section className="home-neutral-band">
           <section className="home-section-wrap">
-            <div className="home-section-head">
-              <h3>Why choose AURAI?</h3>
-              <p>Accurate analysis with personalized recommendations and progress tracking.</p>
+            <div className="home-section-head sr sr-up">
+              <h3>Why NYMIRA?</h3>
+              <p>Real analysis, honest results, and a routine that actually fits your skin.</p>
             </div>
             <div className="home-feature-grid">
-              <article className="home-feature-card">
-                <div className="home-feature-icon">◎</div>
-                <h4>AI Skin Analysis</h4>
-                <p>Computer-vision models estimate concern visibility in seconds.</p>
-              </article>
-              <article className="home-feature-card">
-                <div className="home-feature-icon">✦</div>
-                <h4>Personalized Routine</h4>
-                <p>Suggestions adapt to skin profile, confidence, and risk signals.</p>
-              </article>
-              <article className="home-feature-card">
-                <div className="home-feature-icon">▢</div>
-                <h4>Product Guidance</h4>
-                <p>Structured outputs connect model evidence to practical next steps.</p>
-              </article>
-              <article className="home-feature-card">
-                <div className="home-feature-icon">↗</div>
-                <h4>Track Progress</h4>
-                <p>Review previous scans and monitor trends over time.</p>
-              </article>
+              {[
+                { icon: "◎", title: "Instant skin analysis", text: "Upload a photo and get a clear breakdown of acne, redness, blackheads and more in seconds." },
+                { icon: "✦", title: "Your personalised routine", text: "Step-by-step skincare suggestions tailored to what your skin actually needs right now." },
+                { icon: "▢", title: "Clear next steps", text: "Know exactly what to use, when to use it, and why — no guesswork." },
+                { icon: "↗", title: "Track your progress", text: "Save your scans and watch how your skin changes over time." },
+              ].map((f, i) => (
+                <article key={i} className="home-feature-card sr sr-up" style={{ "--sr-delay": `${i * 0.1}s` }}>
+                  <div className="home-feature-icon">{f.icon}</div>
+                  <h4>{f.title}</h4>
+                  <p>{f.text}</p>
+                </article>
+              ))}
             </div>
           </section>
 
-          <section className="home-section-wrap reveal reveal-3">
-            <div className="home-section-head">
+          <section className="home-section-wrap">
+            <div className="home-section-head sr sr-up">
               <h3>How it works</h3>
-              <p>Three quick steps from upload to personalized guidance.</p>
+              <p>Three steps from photo to personalised routine — takes under a minute.</p>
             </div>
-            <div className="home-flow-grid">
-              <article className="home-flow-card">
-                <span className="home-flow-number">1</span>
-                <h4>Take a photo</h4>
-                <p>Use upload or live camera with automatic quality checks.</p>
-              </article>
-              <article className="home-flow-card">
-                <span className="home-flow-number">2</span>
-                <h4>AI analysis</h4>
-                <p>Classifier + ROI logic + detector fusion produce structured outputs.</p>
-              </article>
-              <article className="home-flow-card">
-                <span className="home-flow-number">3</span>
-                <h4>Get recommendations</h4>
-                <p>Receive personalized routine suggestions and track progress.</p>
-              </article>
+            <div className="home-stair-grid">
+              {[
+                { n: "1", title: "Take a photo", text: "Upload a selfie or use your camera. We check the lighting and clarity automatically.", side: "left" },
+                { n: "2", title: "We analyse your skin", text: "Our AI scans for five conditions and highlights exactly where concerns appear on your face.", side: "right" },
+                { n: "3", title: "Get your routine", text: "Receive a personalised skincare routine based on your results, saved for next time.", side: "left" },
+              ].map((s, i) => (
+                <article key={i} className={`home-stair-card sr sr-${s.side}`} style={{ "--sr-delay": `${i * 0.15}s` }}>
+                  <span className="home-flow-number">{s.n}</span>
+                  <div>
+                    <h4>{s.title}</h4>
+                    <p>{s.text}</p>
+                  </div>
+                </article>
+              ))}
             </div>
           </section>
         </section>
 
-        <section className="home-cta-strip reveal reveal-4">
-          <h3>Ready to transform your skin workflow?</h3>
-          <p>Join users getting structured skin analysis and actionable guidance.</p>
-          <Link to={ctaLink} className="home-cta-strip-btn">
-            Start Your Free Scan
-          </Link>
+        <section className="home-cta-strip sr sr-up">
+          <h3>Your skin deserves better</h3>
+          <p>Take a free scan and find out exactly what your skin needs today.</p>
+          <Link to={ctaLink} className="home-cta-strip-btn">Start your free scan</Link>
         </section>
       </main>
 
       <footer className="home-footer">
         <div className="home-footer-top">
           <div className="home-footer-brand">
-            <h4>AURAI</h4>
-            <p>
-              AI-powered skin analysis and personalized routine support built for
-              clear, trackable results.
-            </p>
+            <h4>NYMIRA</h4>
+            <p>Personalised skin analysis in seconds — built to help you actually understand and take care of your skin.</p>
           </div>
-
           <div className="home-footer-links">
             <div>
               <h5>Product</h5>
@@ -218,21 +175,20 @@ function Home() {
             </div>
             <div>
               <h5>Company</h5>
-              <Link to="/">About</Link>
-              <Link to="/">Research</Link>
-              <Link to="/">Contact</Link>
+              <span className="footer-link-placeholder">About</span>
+              <span className="footer-link-placeholder">Research</span>
+              <a href="mailto:support@nymira.co.uk">Contact</a>
             </div>
             <div>
               <h5>Support</h5>
-              <Link to="/">Privacy</Link>
-              <Link to="/">Terms</Link>
-              <a href="mailto:support@aurai.app">support@aurai.app</a>
+              <span className="footer-link-placeholder">Privacy</span>
+              <span className="footer-link-placeholder">Terms</span>
+              <a href="mailto:support@nymira.co.uk">support@nymira.co.uk</a>
             </div>
           </div>
         </div>
-
         <div className="home-footer-bottom">
-          <p>© 2026 AURAI. All rights reserved.</p>
+          <p>© 2026 NYMIRA. All rights reserved.</p>
         </div>
       </footer>
     </div>

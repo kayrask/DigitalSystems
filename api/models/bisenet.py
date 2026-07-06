@@ -1,145 +1,151 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import resnet18
+import torchvision
 
 
 class ConvBNReLU(nn.Module):
-    def __init__(self, in_ch, out_ch, k=3, s=1, p=1):
+    def __init__(self, in_chan, out_chan, ks=3, stride=1, padding=1):
         super().__init__()
-        self.conv = nn.Conv2d(in_ch, out_ch, k, s, p, bias=False)
-        self.bn = nn.BatchNorm2d(out_ch)
-        self.relu = nn.ReLU(inplace=True)
+        self.conv = nn.Conv2d(in_chan, out_chan, kernel_size=ks, stride=stride, padding=padding, bias=False)
+        self.bn = nn.BatchNorm2d(out_chan)
 
     def forward(self, x):
-        return self.relu(self.bn(self.conv(x)))
+        return F.relu(self.bn(self.conv(x)))
 
 
-class SpatialPath(nn.Module):
-    def __init__(self):
+class BiSeNetOutput(nn.Module):
+    def __init__(self, in_chan, mid_chan, n_classes):
         super().__init__()
-        self.conv1 = ConvBNReLU(3, 64, k=7, s=2, p=3)
-        self.conv2 = ConvBNReLU(64, 64, k=3, s=2, p=1)
-        self.conv3 = ConvBNReLU(64, 64, k=3, s=2, p=1)
-        self.conv_out = ConvBNReLU(64, 128, k=1, s=1, p=0)
+        self.conv = ConvBNReLU(in_chan, mid_chan, ks=3, stride=1, padding=1)
+        self.conv_out = nn.Conv2d(mid_chan, n_classes, kernel_size=1, bias=False)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
+        x = self.conv(x)
         x = self.conv_out(x)
         return x
 
 
 class AttentionRefinementModule(nn.Module):
-    def __init__(self, in_ch, out_ch):
+    def __init__(self, in_chan, out_chan):
         super().__init__()
-        self.conv = ConvBNReLU(in_ch, out_ch, k=3, s=1, p=1)
-        self.attn = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(out_ch, out_ch, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_ch),
-            nn.Sigmoid(),
-        )
+        self.conv = ConvBNReLU(in_chan, out_chan, ks=3, stride=1, padding=1)
+        self.conv_atten = nn.Conv2d(out_chan, out_chan, kernel_size=1, bias=False)
+        self.bn_atten = nn.BatchNorm2d(out_chan)
+        self.sigmoid_atten = nn.Sigmoid()
 
     def forward(self, x):
         feat = self.conv(x)
-        attn = self.attn(feat)
-        return feat * attn
+        atten = F.avg_pool2d(feat, feat.size()[2:])
+        atten = self.conv_atten(atten)
+        atten = self.bn_atten(atten)
+        atten = self.sigmoid_atten(atten)
+        return torch.mul(feat, atten)
 
 
-class FeatureFusionModule(nn.Module):
-    def __init__(self, in_ch, out_ch):
+class Resnet18(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.conv = ConvBNReLU(in_ch, out_ch, k=1, s=1, p=0)
-        self.attn = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(out_ch, out_ch // 4, kernel_size=1, bias=True),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch // 4, out_ch, kernel_size=1, bias=True),
-            nn.Sigmoid(),
-        )
+        resnet18 = torchvision.models.resnet18(weights=None)
+        self.conv1 = resnet18.conv1
+        self.bn1 = resnet18.bn1
+        self.maxpool = resnet18.maxpool
+        self.layer1 = resnet18.layer1
+        self.layer2 = resnet18.layer2
+        self.layer3 = resnet18.layer3
+        self.layer4 = resnet18.layer4
 
-    def forward(self, sp, cp):
-        x = torch.cat([sp, cp], dim=1)
-        x = self.conv(x)
-        attn = self.attn(x)
-        return x + x * attn
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(self.bn1(x))
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        feat8 = self.layer2(x)    # 1/8
+        feat16 = self.layer3(feat8)  # 1/16
+        feat32 = self.layer4(feat16)  # 1/32
+        return feat8, feat16, feat32
 
 
 class ContextPath(nn.Module):
     def __init__(self):
         super().__init__()
-        backbone = resnet18(weights=None)
-        self.layer0 = nn.Sequential(
-            backbone.conv1,
-            backbone.bn1,
-            backbone.relu,
-            backbone.maxpool,
-        )
-        self.layer1 = backbone.layer1
-        self.layer2 = backbone.layer2
-        self.layer3 = backbone.layer3
-        self.layer4 = backbone.layer4
-
+        self.resnet = Resnet18()
         self.arm16 = AttentionRefinementModule(256, 128)
         self.arm32 = AttentionRefinementModule(512, 128)
-        self.conv_avg = ConvBNReLU(512, 128, k=1, s=1, p=0)
+        self.conv_head32 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
+        self.conv_head16 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
+        self.conv_avg = ConvBNReLU(512, 128, ks=1, stride=1, padding=0)
 
     def forward(self, x):
-        h, w = x.shape[2:]
-        x = self.layer0(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        feat16 = self.layer3(x)  # 1/16
-        feat32 = self.layer4(feat16)  # 1/32
+        feat8, feat16, feat32 = self.resnet(x)
+        H8, W8 = feat8.size()[2:]
+        H16, W16 = feat16.size()[2:]
+        H32, W32 = feat32.size()[2:]
 
-        avg = F.adaptive_avg_pool2d(feat32, 1)
+        avg = F.avg_pool2d(feat32, feat32.size()[2:])
         avg = self.conv_avg(avg)
-        avg = F.interpolate(avg, size=feat32.shape[2:], mode="bilinear", align_corners=False)
+        avg_up = F.interpolate(avg, (H32, W32), mode="nearest")
 
-        feat32 = self.arm32(feat32) + avg
-        feat32_up = F.interpolate(feat32, size=feat16.shape[2:], mode="bilinear", align_corners=False)
+        feat32_arm = self.arm32(feat32)
+        feat32_sum = feat32_arm + avg_up
+        feat32_up = F.interpolate(feat32_sum, (H16, W16), mode="nearest")
+        feat32_up = self.conv_head32(feat32_up)
 
-        feat16 = self.arm16(feat16) + feat32_up
-        feat16_up = F.interpolate(feat16, size=(h // 8, w // 8), mode="bilinear", align_corners=False)
+        feat16_arm = self.arm16(feat16)
+        feat16_sum = feat16_arm + feat32_up
+        feat16_up = F.interpolate(feat16_sum, (H8, W8), mode="nearest")
+        feat16_up = self.conv_head16(feat16_up)
 
-        return feat16_up, feat32
+        return feat8, feat16_up, feat32_up
+
+
+class FeatureFusionModule(nn.Module):
+    def __init__(self, in_chan, out_chan):
+        super().__init__()
+        self.convblk = ConvBNReLU(in_chan, out_chan, ks=1, stride=1, padding=0)
+        self.conv1 = nn.Conv2d(out_chan, out_chan // 4, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv2 = nn.Conv2d(out_chan // 4, out_chan, kernel_size=1, stride=1, padding=0, bias=False)
+        self.relu = nn.ReLU(inplace=True)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, fsp, fcp):
+        fcat = torch.cat([fsp, fcp], dim=1)
+        feat = self.convblk(fcat)
+        atten = F.avg_pool2d(feat, feat.size()[2:])
+        atten = self.conv1(atten)
+        atten = self.relu(atten)
+        atten = self.conv2(atten)
+        atten = self.sigmoid(atten)
+        feat_atten = torch.mul(feat, atten)
+        return feat_atten + feat
 
 
 class BiSeNet(nn.Module):
+    """
+    Matches the reference face-parsing.PyTorch architecture — required to load
+    models/bisenet_face_parsing.pth, which was trained against that implementation
+    (state_dict keys: cp.resnet.*, cp.arm16/arm32, ffm.convblk/conv1/conv2, conv_out*).
+    """
+
     def __init__(self, n_classes=19):
         super().__init__()
-        self.spatial_path = SpatialPath()
-        self.context_path = ContextPath()
-        self.ffm = FeatureFusionModule(128 + 128, 256)
-
-        self.conv_out = nn.Sequential(
-            ConvBNReLU(256, 256, k=3, s=1, p=1),
-            nn.Conv2d(256, n_classes, kernel_size=1, bias=True),
-        )
-        self.conv_out16 = nn.Sequential(
-            ConvBNReLU(128, 128, k=3, s=1, p=1),
-            nn.Conv2d(128, n_classes, kernel_size=1, bias=True),
-        )
-        self.conv_out32 = nn.Sequential(
-            ConvBNReLU(128, 128, k=3, s=1, p=1),
-            nn.Conv2d(128, n_classes, kernel_size=1, bias=True),
-        )
+        self.cp = ContextPath()
+        self.ffm = FeatureFusionModule(256, 256)
+        self.conv_out = BiSeNetOutput(256, 256, n_classes)
+        self.conv_out16 = BiSeNetOutput(128, 64, n_classes)
+        self.conv_out32 = BiSeNetOutput(128, 64, n_classes)
 
     def forward(self, x):
-        h, w = x.shape[2:]
-        feat_sp = self.spatial_path(x)
-        feat_cp8, feat_cp32 = self.context_path(x)
-        feat_fuse = self.ffm(feat_sp, feat_cp8)
+        H, W = x.size()[2:]
+        feat_res8, feat_cp8, feat_cp16 = self.cp(x)
+        feat_fuse = self.ffm(feat_res8, feat_cp8)
 
-        out = self.conv_out(feat_fuse)
-        out = F.interpolate(out, size=(h, w), mode="bilinear", align_corners=False)
+        feat_out = self.conv_out(feat_fuse)
+        feat_out16 = self.conv_out16(feat_cp8)
+        feat_out32 = self.conv_out32(feat_cp16)
 
-        out16 = self.conv_out16(feat_cp8)
-        out16 = F.interpolate(out16, size=(h, w), mode="bilinear", align_corners=False)
-
-        out32 = self.conv_out32(feat_cp32)
-        out32 = F.interpolate(out32, size=(h, w), mode="bilinear", align_corners=False)
-
-        return out, out16, out32
+        feat_out = F.interpolate(feat_out, (H, W), mode="bilinear", align_corners=True)
+        feat_out16 = F.interpolate(feat_out16, (H, W), mode="bilinear", align_corners=True)
+        feat_out32 = F.interpolate(feat_out32, (H, W), mode="bilinear", align_corners=True)
+        return feat_out, feat_out16, feat_out32
