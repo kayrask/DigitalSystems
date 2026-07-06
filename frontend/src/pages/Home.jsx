@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
@@ -34,6 +34,18 @@ function useScrollReveal() {
 function Home() {
   useScrollReveal();
 
+  useEffect(() => {
+    function tryInit() {
+      if (typeof window.initLiquidEther === 'function') {
+        window.initLiquidEther('liquid-hero-bg');
+      } else {
+        setTimeout(tryInit, 50);
+      }
+    }
+    tryInit();
+    return () => { if (window._leDestroy) window._leDestroy(); };
+  }, []);
+
   const stored = localStorage.getItem("auraiUser") || sessionStorage.getItem("auraiUser");
   let user = null;
   try { user = stored ? JSON.parse(stored) : null; } catch { user = null; }
@@ -64,6 +76,7 @@ function Home() {
 
       {/* Hero lives OUTSIDE home-main so it gets full width natively */}
       <section className="home-hero-card">
+        <div id="liquid-hero-bg" className="home-hero-fluid" />
         <div className="home-hero-inner">
           <div className="home-hero-left">
             <p className="home-hero-kicker">Skin analysis, personalised for you</p>

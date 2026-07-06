@@ -518,15 +518,15 @@ def simulate_expected_outcome(
     bags_p_raw   = _p_raw("bags");       bags_p   = _p("bags")
 
     texture_level = float(np.clip((0.90 * acne_p + 0.70 * black_p) * strength, 0.0, 0.70))
-    red_level     = float(np.clip(red_p * strength * 0.80, 0.0, 0.65))
-    pig_level     = float(np.clip(pig_p * strength * 0.80, 0.0, 0.65))
-    bags_level    = float(np.clip(bags_p * strength * 0.65, 0.0, 0.50))
+    red_level     = float(np.clip(red_p * strength * 0.40, 0.0, 0.30))
+    pig_level     = float(np.clip(pig_p * strength * 0.40, 0.0, 0.30))
+    bags_level    = float(np.clip(bags_p * strength * 0.50, 0.0, 0.38))
 
     if (acne_p_raw > 0.08 or black_p_raw > 0.08) and texture_level < 0.15 * strength:
         texture_level = 0.15 * strength
-    if red_p_raw  > 0.08 and red_level   < 0.12 * strength: red_level   = 0.12 * strength
-    if pig_p_raw  > 0.08 and pig_level   < 0.12 * strength: pig_level   = 0.12 * strength
-    if bags_p_raw > 0.08 and bags_level  < 0.10 * strength: bags_level  = 0.10 * strength
+    if red_p_raw  > 0.08 and red_level   < 0.06 * strength: red_level   = 0.06 * strength
+    if pig_p_raw  > 0.08 and pig_level   < 0.06 * strength: pig_level   = 0.06 * strength
+    if bags_p_raw > 0.08 and bags_level  < 0.08 * strength: bags_level  = 0.08 * strength
 
     # ── 1) Acne / blackheads — cv2.inpaint (TELEA healing) ─────────────────────
     if texture_level > 1e-4:
@@ -569,13 +569,18 @@ def simulate_expected_outcome(
     # ── 2) Redness — HSV: reduce S channel in red-hue skin pixels ───────────────
     if red_level > 1e-4:
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
-        # OpenCV H range: 0-180. Red hue wraps: 0-15 and 165-180.
+        # OpenCV H range: 0-180. Only target pixels that are genuinely red+saturated.
+        # H <= 10 avoids catching normal olive/brown skin (which sits at H ~10-25).
+        # S > 80 ensures we only hit flush/redness areas, not base skin tone.
         h_ch = hsv[:, :, 0]
-        red_px = ((h_ch <= 15) | (h_ch >= 165)) & (hsv[:, :, 1] > 40) & skin_bool
-        # Reduce saturation — pull toward neutral without green/purple cast.
-        hsv[:, :, 1][red_px] = np.clip(hsv[:, :, 1][red_px] * (1.0 - red_level * 0.85), 0, 255)
-        # Brightness lift in those pixels for "calmed skin" look.
-        hsv[:, :, 2][red_px] = np.clip(hsv[:, :, 2][red_px] * (1.0 + red_level * 0.15), 0, 255)
+        s_ch = hsv[:, :, 1]
+        red_px = ((h_ch <= 10) | (h_ch >= 165)) & (s_ch > 80) & skin_bool
+        if red_px.any():
+            # Smooth the mask so correction fades at edges rather than hard-cutting.
+            red_f = cv2.GaussianBlur(red_px.astype(np.float32), (9, 9), 0)
+            # Gentle saturation pull — 20% reduction max at full level.
+            reduction = np.clip(red_level * 0.65, 0.0, 0.20)
+            hsv[:, :, 1] = np.clip(s_ch * (1.0 - red_f * reduction), 0, 255)
         bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
     # ── 3) Hyperpigmentation — LAB: lift L channel only in dark skin areas ──────
@@ -587,7 +592,7 @@ def simulate_expected_outcome(
         # Smooth the selection to avoid hard edges.
         dark_f = dark_px.astype(np.float32)
         dark_f = cv2.GaussianBlur(dark_f, (11, 11), 0)
-        lift_amount = pig_level * 0.80 * 90.0  # max ~58 L units at full strength
+        lift_amount = pig_level * 0.50 * 60.0  # max ~9 L units at full strength (was ~58)
         lab[:, :, 0] = np.clip(l_ch + dark_f * lift_amount, 0, 255)
         bgr = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
 
@@ -651,10 +656,9 @@ def on_startup():
         print(f"[startup] Model warm-up failed (non-fatal): {e}")
 
 
-# CORS — defaults to localhost dev ports; override via CORS_ORIGINS env var for production.
-_cors_origins = os.getenv(
-    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-).split(",")
+# CORS — allow all origins for local dev; set CORS_ORIGINS env var to restrict in production.
+_cors_origins_raw = os.getenv("CORS_ORIGINS", "")
+_cors_origins = _cors_origins_raw.split(",") if _cors_origins_raw else ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -667,7 +671,7 @@ app.add_middleware(
 # NOTE: these relative paths assume you run uvicorn from PROJECT ROOT.
 # If you run from inside /api folder, you may need to adjust paths.
 
-MODEL_PATH = "models/best_multilabel_for_eval.pt"
+MODEL_PATH = "models/best_multilabel.pt"
 THRESHOLDS_PATH = "models/per_class_thresholds.json"
 
 SKIN_TYPE_MODEL_PATH = "models/skin_type_resnet18.pt"

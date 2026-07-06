@@ -2359,17 +2359,21 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  margin-top: 10px;
+  margin: 10px auto 0;
   cursor: ew-resize;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+  aspect-ratio: 3 / 4;
+  width: min(100%, 380px);
 }
 
 .outcome-slider-img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
   pointer-events: none;
   user-select: none;
 }
@@ -2381,11 +2385,14 @@ body {
   will-change: clip-path;
 }
 
-/* Before image must match base exactly — no absolute/height overrides */
+/* Before image must match base exactly */
 .outcome-slider-before .outcome-slider-img {
-  position: static;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .outcome-slider-line {
@@ -3207,12 +3214,17 @@ select {
   width: 100%;
   min-height: 100vh;
   margin-top: -57px; /* height of .app-header */
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(169, 139, 255, 0.45) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 85% 100%, rgba(124, 92, 255, 0.3) 0%, transparent 55%),
-    linear-gradient(160deg, #2d1b6e 0%, #3d2494 45%, #2a1660 100%);
+  /* Solid fallback — fluid canvas replaces this when WebGL is available */
+  background: #0a1530;
   overflow: hidden;
   position: relative;
+}
+
+/* WebGL fluid canvas — fills entire hero card behind all content */
+.home-hero-fluid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 .home-hero-inner {
@@ -3233,12 +3245,19 @@ select {
   inset: 0;
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23a98bff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
 }
 
 .home-hero-card > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+}
+
+/* Fluid canvas container — must stay absolute despite .home-hero-card > * override */
+.home-hero-fluid {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
 }
 
 .home-hero-left h2 {
@@ -3341,10 +3360,6 @@ select {
 @media (max-width: 900px) {
   .home-hero-card {
     min-height: 100svh;
-    background:
-      radial-gradient(ellipse 160% 55% at 50% 0%, rgba(190, 165, 255, 0.85) 0%, transparent 55%),
-      radial-gradient(ellipse 60% 50% at 85% 100%, rgba(124, 92, 255, 0.3) 0%, transparent 55%),
-      linear-gradient(160deg, #2d1b6e 0%, #3d2494 45%, #2a1660 100%);
   }
   .home-hero-inner {
     grid-template-columns: 1fr;
