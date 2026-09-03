@@ -6,7 +6,7 @@ from mysql.connector import Error, IntegrityError
 from pydantic import BaseModel
 from typing import Optional
 
-from api.main import get_connection
+from api.main import get_connection, hash_password, verify_password
 
 router = APIRouter()
 
@@ -131,4 +131,37 @@ def update_me(user_id: int, data: ProfileUpdate):
         raise HTTPException(status_code=400, detail="Email already in use")
     except Error as e:
         print("MySQL error in /me (PUT):", e)
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/me/change-password")
+def change_password(user_id: int, data: ChangePasswordRequest):
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT password_hash FROM users WHERE id=%s", (user_id,))
+        row = cur.fetchone()
+        if row is None:
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        if not verify_password(data.current_password, row[0]):
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=400, detail="Current password is incorrect.")
+        new_hash = hash_password(data.new_password)
+        cur.execute("UPDATE users SET password_hash=%s WHERE id=%s", (new_hash, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"ok": True}
+    except Error as e:
+        print("MySQL error in /me/change-password:", e)
         raise HTTPException(status_code=500, detail="Database error")

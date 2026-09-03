@@ -1,9 +1,10 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "../App.css";
 import API_BASE from "../config";
+import AppHeader from "../components/AppHeader";
 
 function Login() {
   const navigate = useNavigate();
@@ -11,6 +12,18 @@ function Login() {
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => {
+    function tryInit() {
+      if (typeof window.initLiquidEther === 'function') {
+        window.initLiquidEther('liquid-hero-bg');
+      } else {
+        setTimeout(tryInit, 50);
+      }
+    }
+    tryInit();
+    return () => { if (window._leDestroy) window._leDestroy(); };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,37 +57,21 @@ function Login() {
   };
 
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <div className="brand brand-left" onClick={() => navigate("/")}>
-          <div className="brand-icon">🌬️</div>
-          <div>
-            <h1>AURAI</h1>
-            <p>AI-powered facial skin analysis</p>
+    <div className="app-root auth-page">
+      <div id="liquid-hero-bg" className="home-hero-fluid" />
+      <AppHeader />
+
+      <main className="auth-wrap">
+        <section className="auth-card-v2">
+          <div className="auth-card-head">
+            <p className="home-hero-kicker">Welcome back</p>
+            <h2 className="auth-title-v2">
+              Log in to <span className="home-hero-gradient">NYMIRA</span>
+            </h2>
+            <p className="auth-sub-v2">Pick up right where your skin left off.</p>
           </div>
-        </div>
-      </header>
 
-      <main className="app-main auth-main">
-        <section className="card auth-card auth-shell">
-          <aside className="auth-aside">
-            <p className="auth-aside-kicker">Welcome back</p>
-            <h2>Sign in to continue your skin journey</h2>
-            <p className="auth-aside-copy">
-              Access your scan history, monitor trends, and continue with a new analysis.
-            </p>
-            <div className="auth-aside-points">
-              <span>Fast face scan workflow</span>
-              <span>Structured concern tracking</span>
-              <span>Private account-level history</span>
-            </div>
-          </aside>
-
-          <div className="auth-panel">
-            <h3>Log in</h3>
-            <p className="hint">Use the account you registered previously.</p>
-
-            <form className="auth-form" onSubmit={handleSubmit}>
+          <form className="auth-form" onSubmit={handleSubmit}>
               <label className="input-label">
                 Email
                 <input type="email" className="input-field" placeholder="you@example.com"
@@ -102,7 +99,6 @@ function Login() {
 
               {errorMsg && <p className="error-msg">{errorMsg}</p>}
             </form>
-          </div>
         </section>
       </main>
 

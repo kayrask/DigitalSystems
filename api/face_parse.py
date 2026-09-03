@@ -1,4 +1,5 @@
 import os
+import traceback
 import torch
 import numpy as np
 from PIL import Image
@@ -7,6 +8,8 @@ import torchvision.transforms as T
 try:
     from api.models.bisenet import BiSeNet
 except Exception:  # pragma: no cover
+    print("[FaceParser] FAILED to import BiSeNet class:")
+    traceback.print_exc()
     BiSeNet = None
 
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -28,7 +31,17 @@ _tf = T.Compose(
 class FaceParser:
     def __init__(self, ckpt_path: str | None):
         self.model = None
-        if not ckpt_path or not os.path.exists(ckpt_path) or BiSeNet is None:
+        if not ckpt_path:
+            print("[FaceParser] WARNING: no ckpt_path provided — skin masking is DISABLED "
+                  "(skin_mask() will return an all-skin mask, i.e. no constraint at all).")
+            return
+        if BiSeNet is None:
+            print("[FaceParser] WARNING: BiSeNet class failed to import — skin masking is DISABLED. "
+                  "See import error printed at startup.")
+            return
+        if not os.path.exists(ckpt_path):
+            print(f"[FaceParser] WARNING: checkpoint not found at '{ckpt_path}' — skin masking is DISABLED "
+                  "(skin_mask() will return an all-skin mask, i.e. no constraint at all).")
             return
         try:
             self.model = BiSeNet(n_classes=19)
@@ -36,6 +49,10 @@ class FaceParser:
             self.model.to(DEVICE).eval()
         except Exception:
             self.model = None
+            print(f"[FaceParser] ERROR: failed to load BiSeNet checkpoint '{ckpt_path}' — "
+                  "skin masking is DISABLED and skin_mask() will silently return an all-skin mask "
+                  "(no constraint at all) until this is fixed. Full traceback:")
+            traceback.print_exc()
 
     def skin_mask(self, img: Image.Image) -> np.ndarray:
         w, h = img.size

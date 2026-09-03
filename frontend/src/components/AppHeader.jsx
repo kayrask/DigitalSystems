@@ -39,7 +39,9 @@ function AppHeader() {
   const handleLogout = () => {
     localStorage.removeItem("auraiUser");
     sessionStorage.removeItem("auraiUser");
-    navigate("/", { replace: true });
+    // Full reload so every component re-reads the cleared auth state.
+    // navigate("/") alone is a no-op when already on "/", leaving stale nav buttons.
+    window.location.assign("/");
   };
 
   const displayName = user ? (user.name || user.email || "User") : "";
@@ -55,11 +57,7 @@ function AppHeader() {
     <>
       <header className={"app-header" + (user ? " app-header-auth" : "") + (onHero ? " app-header-hero" : "")}>
         <div className="brand brand-left" onClick={() => navigate("/")}>
-          <div className="brand-icon">🌬️</div>
-          <div>
-            <h1>AURAI</h1>
-            <p>AI-powered facial skin analysis</p>
-          </div>
+          <h1>NYMI<span className="brand-r">R</span>A</h1>
         </div>
 
         {!user && <div className="header-spacer" />}
